@@ -1,0 +1,195 @@
+#!/usr/bin/env node
+import { parseArgs, printHelp } from './args.js';
+import { decodeTxHex, decodeTxHash } from '../decoders/tx.js';
+import { decodeEventHex } from '../decoders/event.js';
+import { renderOutput } from '../output/render.js';
+import { buildMethodTable, loadAbi, mergeMethodTables } from '../abi/loader.js';
+import type { AbiMethodSpecEntry } from '../abi/loader.js';
+import { buildBuiltinMethodTable } from '../abi/builtin/index.js';
+import { fetchContracts } from '../rpc/phantasma.js';
+import type { DecodeOutput } from '../types/decoded.js';
+import type { VmDetailMode, CarbonDetailMode } from '../types/cli.js';
+import { bytesToHex, hexToBytes, setLogger } from 'phantasma-sdk-ts';
+
+function applyVmDetail(output: DecodeOutput, mode: VmDetailMode): void {
+  const vm = output.vm;
+  if (!vm) {
+    return;
+  }
+  if (mode === 'calls') {
+    delete vm.instructions;
+    return;
+  }
+  if (mode === 'ops') {
+    delete vm.methodCalls;
+    return;
+  }
+  if (mode === 'none') {
+    delete vm.instructions;
+    delete vm.methodCalls;
+  }
+}
+
+function applyCarbonDetail(output: DecodeOutput, mode: CarbonDetailMode): void {
+  if (mode === 'all') {
+    return;
+  }
+  if (mode === 'none') {
+    delete output.carbon;
+    return;
+  }
+  const carbon = output.carbon;
+  if (!carbon) {
+    return;
+  }
+  if (mode === 'call') {
+    delete carbon.msg;
+    return;
+  }
+  if (mode === 'msg') {
+    delete carbon.call;
+    delete carbon.calls;
+  }
+}
+
+async function run(): Promise<void> {
+  const result = parseArgs(process.argv.slice(2));
+  if (result.kind === 'help') {
+    printHelp();
+    return;
+  }
+
+  if (result.kind === 'error') {
+    console.error(result.message);
+    printHelp();
+    process.exitCode = 1;
+    return;
+  }
+
+  const opts = result.options;
+  if (opts.verbose) {
+    setLogger(console);
+  } else {
+    setLogger();
+  }
+  let methodTable: Map<string, AbiMethodSpecEntry> | undefined;
+  const preWarnings: string[] = [];
+
+  if (opts.command === 'event') {
+    if (opts.abiPath) {
+      preWarnings.push('--abi is ignored for event mode');
+    }
+    if (opts.resolve) {
+      preWarnings.push('--resolve is ignored for event mode');
+    }
+    if (opts.vmDetail !== 'all') {
+      preWarnings.push('--vm-detail is ignored for event mode');
+    }
+    if (opts.carbonDetail !== 'call') {
+      preWarnings.push('--carbon-detail is ignored for event mode');
+    }
+  } else {
+    const table = buildBuiltinMethodTable();
+    methodTable = table;
+
+    if (opts.abiPath) {
+      try {
+        const abiResult = await loadAbi(opts.abiPath);
+        mergeMethodTables(table, abiResult.methods, preWarnings, 'abi', {
+          warnOnDuplicate: false,
+          replaceSameArity: true,
+        });
+        preWarnings.push(...abiResult.warnings);
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    if (opts.resolve) {
+      if (!opts.rpcUrl) {
+        console.error('RPC url is required for --resolve');
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        const contracts = await fetchContracts(opts.rpcUrl, 'main');
+        const contractResult = buildMethodTable(contracts, 'rpc');
+        mergeMethodTables(table, contractResult.methods, preWarnings, 'rpc', {
+          warnOnDuplicate: false,
+          replaceSameArity: true,
+        });
+        preWarnings.push(...contractResult.warnings);
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+  }
+
+  if (opts.command === 'event') {
+    try {
+      const normalizedInput = bytesToHex(hexToBytes(opts.eventHex ?? ''));
+      const output = decodeEventHex(opts.eventHex ?? '', opts.eventKind);
+      const rendered = renderOutput({
+        source: 'event-hex',
+        input: normalizedInput,
+        format: opts.format,
+        event: output.decoded,
+        warnings: [...preWarnings, ...output.warnings],
+        errors: [],
+      });
+      console.log(rendered);
+    } catch (err) {
+      const rendered = renderOutput({
+        source: 'event-hex',
+        input: opts.eventHex ?? '',
+        format: opts.format,
+        warnings: preWarnings,
+        errors: [err instanceof Error ? err.message : String(err)],
+      });
+      console.log(rendered);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (opts.txHex) {
+    const output = decodeTxHex(opts.txHex, opts.format, methodTable);
+    applyVmDetail(output, opts.vmDetail);
+    applyCarbonDetail(output, opts.carbonDetail);
+    output.warnings.push(...preWarnings);
+    console.log(renderOutput(output));
+    return;
+  }
+
+  if (opts.txHash) {
+    if (!opts.rpcUrl) {
+      console.error('RPC url is required for --hash');
+      process.exitCode = 1;
+      return;
+    }
+    const output = await decodeTxHash(
+      opts.txHash,
+      opts.rpcUrl,
+      opts.format,
+      methodTable
+    );
+    applyVmDetail(output, opts.vmDetail);
+    applyCarbonDetail(output, opts.carbonDetail);
+    output.warnings.push(...preWarnings);
+    console.log(renderOutput(output));
+    return;
+  }
+
+  console.error('missing tx input');
+  process.exitCode = 1;
+}
+
+run().catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exitCode = 1;
+});
