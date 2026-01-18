@@ -46,7 +46,6 @@ export const METHODS: BuiltinMethodSpec[] = [
   { key: 'exchange.SwapReverse', params: makeParams([['from', 'Address'], ['fromSymbol', 'String'], ['toSymbol', 'String'], ['total', 'BigInteger']]) },
   { key: 'exchange.SwapToken', params: makeParams([['buyer', 'Address'], ['seller', 'Address'], ['baseSymbol', 'String'], ['quoteSymbol', 'String'], ['tokenID', 'BigInteger'], ['price', 'BigInteger'], ['signature', 'Bytes']]) },
   { key: 'exchange.SwapTokens', params: makeParams([['from', 'Address'], ['fromSymbol', 'String'], ['toSymbol', 'String'], ['amount', 'BigInteger']]) },
-  { key: 'exchange.SwapTokens', params: makeParams([['buyer', 'Address'], ['seller', 'Address'], ['baseSymbol', 'String'], ['quoteSymbol', 'String'], ['amount', 'BigInteger'], ['price', 'BigInteger'], ['signature', 'Bytes']]) },
   { key: 'exchange.TakeOrder', params: makeParams([['from', 'Address'], ['uid', 'BigInteger']]) },
 ];
 
