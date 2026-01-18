@@ -6,10 +6,12 @@ import type {
   CarbonDetailMode,
 } from '../types/cli.js';
 import type { OutputFormat } from '../types/decoded.js';
+import { DomainSettings } from 'phantasma-sdk-ts';
 
 const DEFAULT_FORMAT: OutputFormat = 'pretty';
 const DEFAULT_VM_DETAIL: VmDetailMode = 'all';
 const DEFAULT_CARBON_DETAIL: CarbonDetailMode = 'call';
+const DEFAULT_PROTOCOL_VERSION = DomainSettings.LatestKnownProtocol;
 
 function isCommand(value: string): value is CliCommand {
   return value === 'tx' || value === 'event';
@@ -51,6 +53,14 @@ function parseCarbonDetail(value: string): CarbonDetailMode | null {
     default:
       return null;
   }
+}
+
+function parseProtocol(value: string): number | null {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
 }
 
 function setFlagValue(
@@ -106,6 +116,15 @@ function setFlagValue(
       opts.carbonDetail = carbonDetail;
       return null;
     }
+    case 'protocol':
+    case 'protocol-version': {
+      const protocolVersion = parseProtocol(value);
+      if (protocolVersion === null) {
+        return `invalid protocol version: ${value}`;
+      }
+      opts.protocolVersion = protocolVersion;
+      return null;
+    }
     default:
       return `unknown flag: --${key}`;
   }
@@ -146,6 +165,7 @@ export function parseArgs(argv: string[]): ParseResult {
       verbose: false,
       vmDetail: DEFAULT_VM_DETAIL,
       carbonDetail: DEFAULT_CARBON_DETAIL,
+      protocolVersion: DEFAULT_PROTOCOL_VERSION,
       txHex: firstArg,
     };
     const err = validateOptions(opts);
@@ -170,6 +190,7 @@ export function parseArgs(argv: string[]): ParseResult {
     verbose: false,
     vmDetail: DEFAULT_VM_DETAIL,
     carbonDetail: DEFAULT_CARBON_DETAIL,
+    protocolVersion: DEFAULT_PROTOCOL_VERSION,
   };
 
   while (index < argv.length) {
@@ -239,6 +260,7 @@ Options:
   --format <json|pretty>  Output format (default: pretty)
   --vm-detail <mode>      VM output detail: all|calls|ops|none (default: all)
   --carbon-detail <mode>  Carbon output detail: all|call|msg|none (default: call)
+  --protocol <number>     Protocol version for interop ABI selection (default: latest)
   --rpc <url>             RPC endpoint for --hash
   --resolve               Enable extra RPC-based resolution
   --verbose               Enable SDK logging

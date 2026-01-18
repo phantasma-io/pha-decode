@@ -1,54 +1,87 @@
 import type { BuiltinMethodSpec, BuiltinMethodTable } from '../helpers.js';
-import { addMethods, makeUnknownParams } from '../helpers.js';
+import { addMethods, makeParams } from '../helpers.js';
 
 // Built-in interop methods from Phantasma-NG ExtCalls.IterateExtcalls.
-export const METHODS: BuiltinMethodSpec[] = [
-  { key: 'Runtime.BurnToken', params: makeUnknownParams(3) },
-  { key: 'Runtime.BurnTokens', params: makeUnknownParams(3) },
-  { key: 'Runtime.Context', params: makeUnknownParams(0) },
-  { key: 'Runtime.ContractExists', params: makeUnknownParams(1) },
-  { key: 'Runtime.DeployContract', params: makeUnknownParams(4) },
-  { key: 'Runtime.GasTarget', params: makeUnknownParams(0) },
-  { key: 'Runtime.GenerateUID', params: makeUnknownParams(0) },
-  { key: 'Runtime.GetAvailableNFTSymbols', params: makeUnknownParams(0) },
-  { key: 'Runtime.GetAvailableTokenSymbols', params: makeUnknownParams(0) },
-  { key: 'Runtime.GetBalance', params: makeUnknownParams(2) },
-  { key: 'Runtime.GetOwnerships', params: makeUnknownParams(2) },
-  { key: 'Runtime.GetTokenDecimals', params: makeUnknownParams(1) },
-  { key: 'Runtime.GetTokenFlags', params: makeUnknownParams(1) },
-  { key: 'Runtime.GetTokenSupply', params: makeUnknownParams(1) },
-  { key: 'Runtime.InfuseToken', params: makeUnknownParams(5) },
-  { key: 'Runtime.IsMinter', params: makeUnknownParams(2) },
-  { key: 'Runtime.IsTrigger', params: makeUnknownParams(0) },
-  { key: 'Runtime.IsWitness', params: makeUnknownParams(1) },
-  { key: 'Runtime.KillContract', params: makeUnknownParams(2) },
-  { key: 'Runtime.Log', params: makeUnknownParams(1) },
-  { key: 'Runtime.MintToken', params: makeUnknownParams(6) },
-  { key: 'Runtime.MintTokens', params: makeUnknownParams(4) },
-  { key: 'Runtime.Nexus', params: makeUnknownParams(0) },
-  { key: 'Runtime.Notify', params: makeUnknownParams(3) },
-  { key: 'Runtime.Notify', params: makeUnknownParams(4) },
-  { key: 'Runtime.PreviousContext', params: makeUnknownParams(0) },
-  { key: 'Runtime.ReadInfusions', params: makeUnknownParams(2) },
-  { key: 'Runtime.ReadToken', params: makeUnknownParams(2) },
-  { key: 'Runtime.ReadToken', params: makeUnknownParams(3) },
-  { key: 'Runtime.ReadTokenRAM', params: makeUnknownParams(2) },
-  { key: 'Runtime.ReadTokenROM', params: makeUnknownParams(2) },
-  { key: 'Runtime.SwapTokens', params: makeUnknownParams(5) },
-  { key: 'Runtime.Time', params: makeUnknownParams(0) },
-  { key: 'Runtime.TokenExists', params: makeUnknownParams(1) },
-  { key: 'Runtime.TransactionHash', params: makeUnknownParams(0) },
-  { key: 'Runtime.TransferBalance', params: makeUnknownParams(3) },
-  { key: 'Runtime.TransferToken', params: makeUnknownParams(4) },
-  { key: 'Runtime.TransferTokens', params: makeUnknownParams(4) },
-  { key: 'Runtime.UpgradeContract', params: makeUnknownParams(3) },
-  { key: 'Runtime.UpgradeContract', params: makeUnknownParams(4) },
-  { key: 'Runtime.ValidateAddress', params: makeUnknownParams(4) },
-  { key: 'Runtime.Validator', params: makeUnknownParams(0) },
-  { key: 'Runtime.Version', params: makeUnknownParams(0) },
-  { key: 'Runtime.WriteToken', params: makeUnknownParams(4) },
+const COMMON_METHODS: BuiltinMethodSpec[] = [
+  { key: 'Runtime.BurnToken', params: makeParams([['source', 'Address'], ['symbol', 'String'], ['tokenID', 'BigInteger']]) },
+  { key: 'Runtime.BurnTokens', params: makeParams([['target', 'Address'], ['symbol', 'String'], ['amount', 'BigInteger']]) },
+  { key: 'Runtime.Context', params: makeParams([]) },
+  { key: 'Runtime.ContractExists', params: makeParams([['contractName', 'String']]) },
+  { key: 'Runtime.DeployContract', params: makeParams([['from', 'Address'], ['contractName', 'String'], ['contractScript', 'Bytes'], ['contractABI', 'Bytes']]) },
+  { key: 'Runtime.GasTarget', params: makeParams([]) },
+  { key: 'Runtime.GenerateUID', params: makeParams([]) },
+  { key: 'Runtime.GetAvailableNFTSymbols', params: makeParams([]) },
+  { key: 'Runtime.GetAvailableTokenSymbols', params: makeParams([]) },
+  { key: 'Runtime.GetBalance', params: makeParams([['address', 'Address'], ['symbol', 'String']]) },
+  { key: 'Runtime.GetOwnerships', params: makeParams([['address', 'Address'], ['symbol', 'String']]) },
+  { key: 'Runtime.GetTokenDecimals', params: makeParams([['symbol', 'String']]) },
+  { key: 'Runtime.GetTokenFlags', params: makeParams([['symbol', 'String']]) },
+  { key: 'Runtime.GetTokenSupply', params: makeParams([['symbol', 'String']]) },
+  { key: 'Runtime.InfuseToken', params: makeParams([['source', 'Address'], ['targetSymbol', 'String'], ['tokenID', 'BigInteger'], ['infuseSymbol', 'String'], ['value', 'BigInteger']]) },
+  { key: 'Runtime.IsMinter', params: makeParams([['address', 'Address'], ['symbol', 'String']]) },
+  { key: 'Runtime.IsTrigger', params: makeParams([]) },
+  { key: 'Runtime.IsWitness', params: makeParams([['address', 'Address']]) },
+  { key: 'Runtime.KillContract', params: makeParams([['from', 'Address'], ['contractName', 'String']]) },
+  { key: 'Runtime.Log', params: makeParams([['text', 'String']]) },
+  { key: 'Runtime.MintToken', params: makeParams([['source', 'Address'], ['destination', 'Address'], ['symbol', 'String'], ['rom', 'Bytes'], ['ram', 'Bytes'], ['seriesID', 'BigInteger']]) },
+  { key: 'Runtime.MintTokens', params: makeParams([['source', 'Address'], ['destination', 'Address'], ['symbol', 'String'], ['amount', 'BigInteger']]) },
+  { key: 'Runtime.Nexus', params: makeParams([]) },
+  { key: 'Runtime.PreviousContext', params: makeParams([]) },
+  { key: 'Runtime.ReadInfusions', params: makeParams([['symbol', 'String'], ['tokenID', 'BigInteger']]) },
+  { key: 'Runtime.ReadTokenRAM', params: makeParams([['symbol', 'String'], ['tokenID', 'BigInteger']]) },
+  { key: 'Runtime.ReadTokenROM', params: makeParams([['symbol', 'String'], ['tokenID', 'BigInteger']]) },
+  { key: 'Runtime.SwapTokens', params: makeParams([['targetChain', 'String'], ['source', 'Address'], ['destination', 'Address'], ['symbol', 'String'], ['amount', 'BigInteger']]) },
+  { key: 'Runtime.Time', params: makeParams([]) },
+  { key: 'Runtime.TokenExists', params: makeParams([['symbol', 'String']]) },
+  { key: 'Runtime.TransactionHash', params: makeParams([]) },
+  { key: 'Runtime.TransferBalance', params: makeParams([['source', 'Address'], ['destination', 'Address'], ['symbol', 'String']]) },
+  { key: 'Runtime.TransferToken', params: makeParams([['source', 'Address'], ['destination', 'Address'], ['symbol', 'String'], ['tokenID', 'BigInteger']]) },
+  { key: 'Runtime.TransferTokens', params: makeParams([['source', 'Address'], ['destination', 'Address'], ['symbol', 'String'], ['amount', 'BigInteger']]) },
+  { key: 'Runtime.ValidateAddress', params: makeParams([['address', 'Address'], ['signedData', 'String'], ['random', 'String'], ['data', 'String']]) },
+  { key: 'Runtime.Validator', params: makeParams([]) },
+  { key: 'Runtime.Version', params: makeParams([]) },
+  { key: 'Runtime.WriteToken', params: makeParams([['from', 'Address'], ['symbol', 'String'], ['tokenID', 'BigInteger'], ['ram', 'Bytes']]) },
 ];
 
-export function addRuntimeInteropMethods(table: BuiltinMethodTable): void {
-  addMethods(table, METHODS);
+const NOTIFY_LEGACY: BuiltinMethodSpec = {
+  key: 'Runtime.Notify',
+  params: makeParams([['kind', 'EventKind'], ['address', 'Address'], ['data', 'Object']]),
+};
+
+const NOTIFY_V19: BuiltinMethodSpec = {
+  key: 'Runtime.Notify',
+  params: makeParams([['kind', 'EventKind'], ['address', 'Address'], ['data', 'Object'], ['name', 'String']]),
+};
+
+const READTOKEN_LEGACY: BuiltinMethodSpec = {
+  key: 'Runtime.ReadToken',
+  params: makeParams([['symbol', 'String'], ['tokenID', 'BigInteger']]),
+};
+
+const READTOKEN_V15: BuiltinMethodSpec = {
+  key: 'Runtime.ReadToken',
+  params: makeParams([['symbol', 'String'], ['tokenID', 'BigInteger'], ['fields', 'String']]),
+};
+
+const UPGRADE_LEGACY: BuiltinMethodSpec = {
+  key: 'Runtime.UpgradeContract',
+  params: makeParams([['from', 'Address'], ['contractName', 'String'], ['contractScript', 'Bytes']]),
+};
+
+const UPGRADE_V14: BuiltinMethodSpec = {
+  key: 'Runtime.UpgradeContract',
+  params: makeParams([['from', 'Address'], ['contractName', 'String'], ['contractScript', 'Bytes'], ['contractABI', 'Bytes']]),
+};
+
+export function addRuntimeInteropMethods(
+  table: BuiltinMethodTable,
+  protocolVersion: number
+): void {
+  addMethods(table, COMMON_METHODS);
+
+  // Register both arities so decoding can follow the actual stack shape.
+  // Protocol-specific expectations are enforced via warnings during disassembly.
+  addMethods(table, [NOTIFY_LEGACY, NOTIFY_V19]);
+  addMethods(table, [READTOKEN_LEGACY, READTOKEN_V15]);
+  addMethods(table, [UPGRADE_LEGACY, UPGRADE_V14]);
 }

@@ -89,7 +89,7 @@ async function run(): Promise<void> {
       preWarnings.push('--carbon-detail is ignored for event mode');
     }
   } else {
-    const table = buildBuiltinMethodTable();
+    const table = buildBuiltinMethodTable(opts.protocolVersion);
     methodTable = table;
 
     if (opts.abiPath) {
@@ -158,7 +158,7 @@ async function run(): Promise<void> {
   }
 
   if (opts.txHex) {
-    const output = decodeTxHex(opts.txHex, opts.format, methodTable);
+    const output = decodeTxHex(opts.txHex, opts.format, methodTable, opts.protocolVersion);
     applyVmDetail(output, opts.vmDetail);
     applyCarbonDetail(output, opts.carbonDetail);
     output.warnings.push(...preWarnings);
@@ -176,7 +176,8 @@ async function run(): Promise<void> {
       opts.txHash,
       opts.rpcUrl,
       opts.format,
-      methodTable
+      methodTable,
+      opts.protocolVersion
     );
     applyVmDetail(output, opts.vmDetail);
     applyCarbonDetail(output, opts.carbonDetail);

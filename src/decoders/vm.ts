@@ -28,7 +28,8 @@ function readByteArrayHex(reader: PBinaryReader): string {
 
 export function decodeVmTransaction(
   hex: string,
-  methodTable?: Map<string, AbiMethodSpecEntry>
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
 ): VmDecodeResult {
   const warnings: string[] = [];
   const bytes = hexToBytes(hex);
@@ -66,7 +67,7 @@ export function decodeVmTransaction(
 
   if (scriptHex.length > 0) {
     try {
-      const disasm = disassembleVmScript(scriptHex, methodTable);
+      const disasm = disassembleVmScript(scriptHex, methodTable, protocolVersion);
       decoded.instructions = disasm.instructions;
       decoded.methodCalls = disasm.methodCalls;
       warnings.push(...disasm.warnings);

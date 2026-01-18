@@ -1,12 +1,12 @@
 import type { BuiltinMethodSpec, BuiltinMethodTable } from '../helpers.js';
-import { addMethods, makeUnknownParams } from '../helpers.js';
+import { addMethods, makeParams } from '../helpers.js';
 
 // Built-in interop methods from Phantasma-NG ExtCalls.IterateExtcalls.
 export const METHODS: BuiltinMethodSpec[] = [
-  { key: 'ABI()', params: makeUnknownParams(1) },
-  { key: 'Address()', params: makeUnknownParams(1) },
-  { key: 'Hash()', params: makeUnknownParams(1) },
-  { key: 'Timestamp()', params: makeUnknownParams(1) },
+  { key: 'ABI()', params: makeParams([['bytes', 'Bytes']]) },
+  { key: 'Address()', params: makeParams([['address', 'Address']]) },
+  { key: 'Hash()', params: makeParams([['bytes', 'Bytes']]) },
+  { key: 'Timestamp()', params: makeParams([['value', 'BigInteger']]) },
 ];
 
 export function addConstructorsInteropMethods(table: BuiltinMethodTable): void {

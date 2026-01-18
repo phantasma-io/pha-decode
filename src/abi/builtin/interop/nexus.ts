@@ -1,14 +1,14 @@
 import type { BuiltinMethodSpec, BuiltinMethodTable } from '../helpers.js';
-import { addMethods, makeUnknownParams } from '../helpers.js';
+import { addMethods, makeParams } from '../helpers.js';
 
 // Built-in interop methods from Phantasma-NG ExtCalls.IterateExtcalls.
 export const METHODS: BuiltinMethodSpec[] = [
-  { key: 'Nexus.BeginInit', params: makeUnknownParams(1) },
-  { key: 'Nexus.CreateOrganization', params: makeUnknownParams(4) },
-  { key: 'Nexus.CreateToken', params: makeUnknownParams(3) },
-  { key: 'Nexus.CreateTokenSeries', params: makeUnknownParams(7) },
-  { key: 'Nexus.EndInit', params: makeUnknownParams(1) },
-  { key: 'Nexus.GetGovernanceValue', params: makeUnknownParams(1) },
+  { key: 'Nexus.BeginInit', params: makeParams([['owner', 'Address']]) },
+  { key: 'Nexus.CreateOrganization', params: makeParams([['source', 'Address'], ['id', 'String'], ['name', 'String'], ['script', 'Bytes']]) },
+  { key: 'Nexus.CreateToken', params: makeParams([['owner', 'Address'], ['script', 'Bytes'], ['abiBytes', 'Bytes']]) },
+  { key: 'Nexus.CreateTokenSeries', params: makeParams([['from', 'Address'], ['symbol', 'String'], ['seriesID', 'BigInteger'], ['maxSupply', 'BigInteger'], ['mode', 'TokenSeriesMode'], ['script', 'Bytes'], ['abiBytes', 'Bytes']]) },
+  { key: 'Nexus.EndInit', params: makeParams([['owner', 'Address']]) },
+  { key: 'Nexus.GetGovernanceValue', params: makeParams([['tag', 'String']]) },
 ];
 
 export function addNexusInteropMethods(table: BuiltinMethodTable): void {

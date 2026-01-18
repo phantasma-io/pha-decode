@@ -11,6 +11,7 @@ export interface CliOptions {
   verbose: boolean;
   vmDetail: VmDetailMode;
   carbonDetail: CarbonDetailMode;
+  protocolVersion: number;
   rpcUrl?: string;
   abiPath?: string;
   txHash?: string;

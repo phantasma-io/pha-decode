@@ -20,7 +20,8 @@ function buildBaseOutput(source: DecodeOutput['source'], input: string, format: 
 export function decodeTxHex(
   hex: string,
   format: OutputFormat,
-  methodTable?: Map<string, AbiMethodSpecEntry>
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
 ): DecodeOutput {
   const output = buildBaseOutput('tx-hex', hex, format);
   let normalized: string;
@@ -42,7 +43,7 @@ export function decodeTxHex(
   }
 
   try {
-    const vm = decodeVmTransaction(normalized, methodTable);
+    const vm = decodeVmTransaction(normalized, methodTable, protocolVersion);
     output.vm = vm.decoded;
     output.warnings.push(...vm.warnings);
     return output;
@@ -56,7 +57,8 @@ export function decodeTxHex(
 
 function decodeVmFromRpc(
   tx: TransactionData,
-  methodTable?: Map<string, AbiMethodSpecEntry>
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
 ): { vm: NonNullable<DecodeOutput['vm']>; warnings: string[] } {
   // RPC provides script/payload but not the serialized VM tx container.
   const warnings: string[] = [];
@@ -70,7 +72,7 @@ function decodeVmFromRpc(
   };
   if (decoded.scriptHex) {
     try {
-      const disasm = disassembleVmScript(decoded.scriptHex, methodTable);
+      const disasm = disassembleVmScript(decoded.scriptHex, methodTable, protocolVersion);
       decoded.instructions = disasm.instructions;
       decoded.methodCalls = disasm.methodCalls;
       warnings.push(...disasm.warnings);
@@ -85,7 +87,8 @@ export async function decodeTxHash(
   hash: string,
   rpcUrl: string,
   format: OutputFormat,
-  methodTable?: Map<string, AbiMethodSpecEntry>
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
 ): Promise<DecodeOutput> {
   const output = buildBaseOutput('tx-hash', hash, format);
   output.rpc = { url: rpcUrl, method: 'getTransaction' };
@@ -129,7 +132,7 @@ export async function decodeTxHash(
     }
   }
 
-  const vmResult = decodeVmFromRpc(tx, methodTable);
+  const vmResult = decodeVmFromRpc(tx, methodTable, protocolVersion);
   output.vm = vmResult.vm;
   output.warnings.push(...vmResult.warnings);
   output.warnings.push('RPC does not expose full VM tx bytes; output is script/payload only');

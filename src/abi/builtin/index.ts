@@ -26,12 +26,15 @@ import { addNexusInteropMethods } from './interop/nexus.js';
 import { addOracleInteropMethods } from './interop/oracle.js';
 import { addOrganizationInteropMethods } from './interop/organization.js';
 import { addRuntimeInteropMethods } from './interop/runtime.js';
+import { DomainSettings } from 'phantasma-sdk-ts';
 
 // Built-in ABI table derived from Phantasma-NG sources for standard contracts/interop.
-export function buildBuiltinMethodTable(): Map<string, AbiMethodSpecEntry> {
+export function buildBuiltinMethodTable(
+  protocolVersion: number = DomainSettings.LatestKnownProtocol
+): Map<string, AbiMethodSpecEntry> {
   const table = new Map<string, AbiMethodSpecEntry>();
 
-  addRuntimeInteropMethods(table);
+  addRuntimeInteropMethods(table, protocolVersion);
   addNexusInteropMethods(table);
   addOrganizationInteropMethods(table);
   addDataInteropMethods(table);

@@ -33,6 +33,7 @@ phadec event --hex <eventHex> [--kind <eventKind>]
 - `--abi <path>` ABI JSON file or directory (merged with built-ins).
 - `--vm-detail <all|calls|ops|none>` Control VM output detail (default: `all`).
 - `--carbon-detail <all|call|msg|none>` Control Carbon output detail (default: `call`).
+- `--protocol <number>` Protocol version for interop ABI selection (default: latest known).
 - `--verbose` Enable SDK logging.
 - `--kind <eventKind>` Event kind hint for hex-encoded (classic) events (event mode only).
 - `--help` Show help.

@@ -1,15 +1,15 @@
 import type { BuiltinMethodSpec, BuiltinMethodTable } from '../helpers.js';
-import { addMethods, makeUnknownParams } from '../helpers.js';
+import { addMethods, makeParams } from '../helpers.js';
 
 // Built-in interop methods from Phantasma-NG ExtCalls.IterateExtcalls.
 export const METHODS: BuiltinMethodSpec[] = [
-  { key: 'Map.Clear', params: makeUnknownParams(1) },
-  { key: 'Map.Count', params: makeUnknownParams(2) },
-  { key: 'Map.Get', params: makeUnknownParams(4) },
-  { key: 'Map.Has', params: makeUnknownParams(4) },
-  { key: 'Map.Keys', params: makeUnknownParams(2) },
-  { key: 'Map.Remove', params: makeUnknownParams(2) },
-  { key: 'Map.Set', params: makeUnknownParams(3) },
+  { key: 'Map.Clear', params: makeParams([['field', 'String']]) },
+  { key: 'Map.Count', params: makeParams([['contract', 'String'], ['field', 'String']]) },
+  { key: 'Map.Get', params: makeParams([['contract', 'String'], ['field', 'String'], ['entryKey', 'Bytes'], ['vmType', 'VMType']]) },
+  { key: 'Map.Has', params: makeParams([['contract', 'String'], ['field', 'String'], ['entryKey', 'Bytes'], ['vmType', 'VMType']]) },
+  { key: 'Map.Keys', params: makeParams([['contract', 'String'], ['field', 'String']]) },
+  { key: 'Map.Remove', params: makeParams([['field', 'String'], ['entryKey', 'Bytes']]) },
+  { key: 'Map.Set', params: makeParams([['field', 'String'], ['entryKey', 'Bytes'], ['value', 'Bytes']]) },
 ];
 
 export function addMapInteropMethods(table: BuiltinMethodTable): void {

@@ -76,6 +76,38 @@ function vmTypeName(type: number): string {
   return VMType[type] ?? `VMType_${type}`;
 }
 
+function expectedInteropArity(key: string, protocolVersion: number): number | undefined {
+  // Some interop methods changed arity across protocol versions; use this to warn on mismatches.
+  switch (key) {
+    case 'Runtime.Notify':
+      return protocolVersion < 19 ? 3 : 4;
+    case 'Runtime.ReadToken':
+      return protocolVersion < 15 ? 2 : 3;
+    case 'Runtime.UpgradeContract':
+      return protocolVersion < 14 ? 3 : 4;
+    default:
+      return undefined;
+  }
+}
+
+function warnOnProtocolArityMismatch(
+  key: string,
+  protocolVersion: number | undefined,
+  actualCount: number,
+  warnings: string[]
+): void {
+  if (protocolVersion === undefined) {
+    return;
+  }
+  const expected = expectedInteropArity(key, protocolVersion);
+  if (expected === undefined || expected === actualCount) {
+    return;
+  }
+  warnings.push(
+    `protocol ${protocolVersion} expects ${expected} args for ${key}; script provides ${actualCount}`
+  );
+}
+
 class ScriptReader {
   private offset = 0;
   constructor(private readonly bytes: Uint8Array) {}
@@ -444,9 +476,12 @@ function resolveMethodSpec(
   method: string,
   stack: VmValue[],
   table: Map<string, AbiMethodSpecEntry> | undefined,
-  warnings: string[]
+  warnings: string[],
+  protocolVersion?: number
 ): { key: string; spec?: AbiMethodSpec } {
   const key = contract ? `${contract}.${method}` : method;
+  const argCount = stack.length;
+  warnOnProtocolArityMismatch(key, protocolVersion, argCount, warnings);
   if (!table || !table.has(key)) {
     warnings.push(`missing ABI for ${key}; args omitted`);
     stack.length = 0;
@@ -505,7 +540,8 @@ function attachAbi(arg: VmMethodCallArg, param?: AbiParamSpec): VmMethodCallArg 
 function extractMethodCalls(
   instructions: Instruction[],
   table: Map<string, AbiMethodSpecEntry> | undefined,
-  warnings: string[]
+  warnings: string[],
+  protocolVersion?: number
 ): VmMethodCall[] {
   const regs: Array<VmValue | null> = new Array(16).fill(null);
   const stack: VmValue[] = [];
@@ -543,7 +579,7 @@ function extractMethodCalls(
         const src = instruction.args[0] as number;
         const contract = regs[src]?.asString() ?? '';
         const method = stack.pop()?.asString() ?? '';
-        const resolved = resolveMethodSpec(contract, method, stack, table, warnings);
+        const resolved = resolveMethodSpec(contract, method, stack, table, warnings, protocolVersion);
         const args = resolved.spec ? popArgs(resolved.key, stack, resolved.spec.params.length) : [];
         calls.push({
           contract,
@@ -555,7 +591,7 @@ function extractMethodCalls(
       case 'EXTCALL': {
         const src = instruction.args[0] as number;
         const method = regs[src]?.asString() ?? '';
-        const resolved = resolveMethodSpec('', method, stack, table, warnings);
+        const resolved = resolveMethodSpec('', method, stack, table, warnings, protocolVersion);
         const args = resolved.spec ? popArgs(resolved.key, stack, resolved.spec.params.length) : [];
         calls.push({
           contract: '',
@@ -574,12 +610,13 @@ function extractMethodCalls(
 
 export function disassembleVmScript(
   scriptHex: string,
-  methodTable?: Map<string, AbiMethodSpecEntry>
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
 ): VmDisasmResult {
   const warnings: string[] = [];
   const bytes = hexToBytes(scriptHex);
   const instructions = disassembleScript(bytes);
-  const calls = extractMethodCalls(instructions, methodTable, warnings);
+  const calls = extractMethodCalls(instructions, methodTable, warnings, protocolVersion);
   const outputInstructions = instructions.map((instruction) => instructionToOutput(instruction));
 
   return {
