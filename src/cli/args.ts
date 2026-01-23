@@ -251,10 +251,10 @@ export function parseArgs(argv: string[]): ParseResult {
 
 export function printHelp(): void {
   const text = `Usage:
-  phadec <txHex>
-  phadec tx --hex <txHex>
-  phadec tx --hash <txHash> [--rpc <url>]
-  phadec event --hex <eventHex> [--kind <kind>]
+  pha-decode <txHex>
+  pha-decode tx --hex <txHex>
+  pha-decode tx --hash <txHash> [--rpc <url>]
+  pha-decode event --hex <eventHex> [--kind <kind>]
 
 Options:
   --format <json|pretty>  Output format (default: pretty)

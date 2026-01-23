@@ -1,15 +1,26 @@
 {
-  "name": "phadec",
+  "name": "pha-decode",
   "version": "0.1.0",
-  "private": true,
+  "description": "Phantasma transaction and event decoder CLI",
   "type": "module",
   "bin": {
-    "phadec": "dist/cli/index.js"
+    "pha-decode": "dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phantasma-io/pha-decode.git"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli/index.ts",
-    "start": "node dist/cli/index.js"
+    "start": "node dist/cli/index.js",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "phantasma-sdk-ts": "^0.2.9"

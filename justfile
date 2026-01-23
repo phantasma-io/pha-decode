@@ -11,3 +11,7 @@ r *args:
 
 d *args:
     npm run dev -- {{args}}
+
+[group('publish')]
+publish: build
+    npm publish

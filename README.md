@@ -1,4 +1,4 @@
-# phadec
+# pha-decode
 
 CLI tool for decoding Phantasma transactions (Carbon + VM) and hex-encoded event data.
 
@@ -14,16 +14,23 @@ CLI tool for decoding Phantasma transactions (Carbon + VM) and hex-encoded event
 
 ## Installation
 ```bash
+# install globally (recommended for CLI usage)
+npm i -g pha-decode
+
+# or run once via npx
+npx pha-decode --help
+
+# local dev install
 npm install
 npm run build
 ```
 
 ## Usage
 ```bash
-phadec <txHex>
-phadec tx --hex <txHex>
-phadec tx --hash <txHash> --rpc <url>
-phadec event --hex <eventHex> [--kind <eventKind>]
+pha-decode <txHex>
+pha-decode tx --hex <txHex>
+pha-decode tx --hash <txHash> --rpc <url>
+pha-decode event --hex <eventHex> [--kind <eventKind>]
 ```
 
 ## Options
@@ -41,7 +48,7 @@ phadec event --hex <eventHex> [--kind <eventKind>]
 ## Examples
 Decode a tx hash from RPC:
 ```bash
-phadec tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AFBA52A \
+pha-decode tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AFBA52A \
   --rpc https://pharpc1.phantasma.info/rpc \
   --format json \
   --vm-detail calls \
@@ -50,12 +57,12 @@ phadec tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AFBA52
 
 Decode a local tx hex (shorthand):
 ```bash
-phadec 0xDEADBEEF...
+pha-decode 0xDEADBEEF...
 ```
 
 Decode hex-encoded event data (classic event):
 ```bash
-phadec event --hex 0xAABBCC... --kind TokenMint
+pha-decode event --hex 0xAABBCC... --kind TokenMint
 ```
 
 ## Output
