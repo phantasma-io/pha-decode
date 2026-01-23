@@ -3,8 +3,10 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 default:
     @just --list
 
-b:
+build: 
     npm run build
+
+alias b := build
 
 r *args:
     node dist/cli/index.js {{args}}

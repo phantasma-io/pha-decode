@@ -1,5 +1,5 @@
 import type { EventDecoded, JsonValue } from '../types/decoded.js';
-import { Address, bytesToHex, hexToBytes, twosComplementLEToBigInt } from 'phantasma-sdk-ts';
+import { Address, bytesToHex, CarbonBinaryReader, hexToBytes, twosComplementLEToBigInt } from 'phantasma-sdk-ts';
 
 export interface EventDecodeResult {
   decoded: EventDecoded;
@@ -73,6 +73,10 @@ const EVENT_KIND_NAME: Record<number, string> = {
   63: 'ExecutionFailure',
   64: 'Custom',
   65: 'Custom_V2',
+  66: 'GovernanceSetGasConfig',
+  67: 'GovernanceSetChainConfig',
+  68: 'TokenSeriesCreate',
+  69: 'SpecialResolution',
 };
 
 const TYPE_AUCTION_NAME: Record<number, string> = {
@@ -285,13 +289,18 @@ function decodeInfusionEvent(reader: LegacyEventReader): JsonValue {
 }
 
 function decodeMarketEvent(reader: LegacyEventReader): JsonValue {
+  const baseSymbol = reader.readVarString();
+  const quoteSymbol = reader.readVarString();
+  const id = reader.readBigInteger();
+  const price = reader.readBigInteger();
+  const endPrice = reader.readBigInteger();
   const typeId = reader.readVarInt();
   return {
-    baseSymbol: reader.readVarString(),
-    quoteSymbol: reader.readVarString(),
-    id: reader.readBigInteger(),
-    price: reader.readBigInteger(),
-    endPrice: reader.readBigInteger(),
+    baseSymbol,
+    quoteSymbol,
+    id,
+    price,
+    endPrice,
     type: TYPE_AUCTION_NAME[typeId] ?? `TypeAuction_${typeId}`,
   };
 }
@@ -379,6 +388,91 @@ function decodeMasterEvent(reader: LegacyEventReader): JsonValue {
     chain: reader.readVarString(),
     claimDate: reader.readTimestamp(),
   };
+}
+
+function decodeSpecialResolutionEvent(reader: LegacyEventReader): JsonValue {
+  // SpecialResolution event payload is a little-endian uint64 resolution id.
+  const bytes = reader.readRemainingBytes();
+  if (bytes.length === 8) {
+    return {
+      resolutionId: twosComplementLEToBigInt(bytes).toString(),
+    };
+  }
+  return {
+    dataHex: bytesToHex(bytes),
+  };
+}
+
+function decodeGovernanceChainConfigEvent(reader: LegacyEventReader): JsonValue {
+  const bytes = reader.readRemainingBytes();
+  if (bytes.length === 0) {
+    return { dataHex: '' };
+  }
+  try {
+    // Carbon governance config payloads are serialized structs in node_cpp.
+    const bin = new CarbonBinaryReader(bytes);
+    const decoded = {
+      version: bin.read1(),
+      reserved1: bin.read1(),
+      reserved2: bin.read1(),
+      reserved3: bin.read1(),
+      allowedTxTypes: bin.read4u(),
+      expiryWindow: bin.read4u(),
+      blockRateTarget: bin.read4u(),
+    };
+    const extra = bin.readRemaining();
+    if (extra.length > 0) {
+      return { ...decoded, extraHex: bytesToHex(extra) };
+    }
+    return decoded;
+  } catch (err) {
+    return {
+      dataHex: bytesToHex(bytes),
+      parseError: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function decodeGovernanceGasConfigEvent(reader: LegacyEventReader): JsonValue {
+  const bytes = reader.readRemainingBytes();
+  if (bytes.length === 0) {
+    return { dataHex: '' };
+  }
+  try {
+    // Carbon governance config payloads are serialized structs in node_cpp.
+    const bin = new CarbonBinaryReader(bytes);
+    const decoded = {
+      version: bin.read1(),
+      maxNameLength: bin.read1(),
+      maxTokenSymbolLength: bin.read1(),
+      feeShift: bin.read1(),
+      maxStructureSize: bin.read4u(),
+      feeMultiplier: bin.read8u().toString(),
+      gasTokenId: bin.read8u().toString(),
+      dataTokenId: bin.read8u().toString(),
+      minimumGasOffer: bin.read8u().toString(),
+      dataEscrowPerRow: bin.read8u().toString(),
+      gasFeeTransfer: bin.read8u().toString(),
+      gasFeeQuery: bin.read8u().toString(),
+      gasFeeCreateTokenBase: bin.read8u().toString(),
+      gasFeeCreateTokenSymbol: bin.read8u().toString(),
+      gasFeeCreateTokenSeries: bin.read8u().toString(),
+      gasFeePerByte: bin.read8u().toString(),
+      gasFeeRegisterName: bin.read8u().toString(),
+      gasBurnRatioMul: bin.read8u().toString(),
+      gasBurnRatioShift: bin.read1(),
+    };
+    const extra = bin.readRemaining();
+    if (extra.length > 0) {
+      return { ...decoded, extraHex: bytesToHex(extra) };
+    }
+    return decoded;
+  } catch (err) {
+    return {
+      dataHex: bytesToHex(bytes),
+      parseError: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 function decodeTransactionSettleEvent(reader: LegacyEventReader): JsonValue {
@@ -473,6 +567,17 @@ function decodeByKind(reader: LegacyEventReader, kindId: number): JsonValue | nu
     case 54: // TaskStart
     case 55: // TaskStop
       return decodeRawBigIntegerEvent(reader);
+    case 64: // Custom
+    case 65: // Custom_V2
+      return decodeRawBytesEvent(reader);
+    case 66: // GovernanceSetGasConfig
+      return decodeGovernanceGasConfigEvent(reader);
+    case 67: // GovernanceSetChainConfig
+      return decodeGovernanceChainConfigEvent(reader);
+    case 68: // TokenSeriesCreate
+      return decodeRawBytesEvent(reader);
+    case 69: // SpecialResolution
+      return decodeSpecialResolutionEvent(reader);
     default:
       return null;
   }

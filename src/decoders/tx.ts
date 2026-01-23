@@ -1,5 +1,5 @@
-import type { DecodeOutput, OutputFormat } from '../types/decoded.js';
-import { bytesToHex, hexToBytes } from 'phantasma-sdk-ts';
+import type { CarbonDecoded, DecodeOutput, OutputFormat } from '../types/decoded.js';
+import { bytesToHex, hexToBytes, TxTypes } from 'phantasma-sdk-ts';
 import { decodeCarbonPayloadForRpc, decodeCarbonSignedTx } from './carbon.js';
 import { decodeVmTransaction } from './vm.js';
 import { fetchTransaction } from '../rpc/phantasma.js';
@@ -15,6 +15,39 @@ function buildBaseOutput(source: DecodeOutput['source'], input: string, format: 
     warnings: [],
     errors: [],
   };
+}
+
+function extractPhantasmaRawTxHex(msg: CarbonDecoded['msg']): string | null {
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
+    return null;
+  }
+  const transaction = (msg as Record<string, unknown>).transaction;
+  return typeof transaction === 'string' && transaction.length > 0 ? transaction : null;
+}
+
+function attachInnerVmIfPhantasmaRaw(
+  output: DecodeOutput,
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
+): void {
+  if (!output.carbon || output.carbon.type !== TxTypes.Phantasma_Raw) {
+    return;
+  }
+  // Phantasma_Raw wraps a full VM transaction; decode it to expose the inner payload.
+  const txHex = extractPhantasmaRawTxHex(output.carbon.msg);
+  if (!txHex) {
+    output.warnings.push('Phantasma_Raw payload missing inner transaction bytes');
+    return;
+  }
+  try {
+    const vm = decodeVmTransaction(txHex, methodTable, protocolVersion);
+    output.vm = vm.decoded;
+    output.warnings.push(...vm.warnings);
+  } catch (err) {
+    output.warnings.push(
+      `Phantasma_Raw inner VM decode failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 }
 
 export function decodeTxHex(
@@ -37,6 +70,7 @@ export function decodeTxHex(
     const carbon = decodeCarbonSignedTx(normalized);
     output.carbon = carbon.decoded;
     output.warnings.push(...carbon.warnings);
+    attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
     return output;
   } catch {
     // Carbon parse failed; try VM next.
@@ -108,6 +142,7 @@ export async function decodeTxHash(
       const carbon = decodeCarbonSignedTx(normalized);
       output.carbon = carbon.decoded;
       output.warnings.push(...carbon.warnings);
+      attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
       return output;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -123,6 +158,7 @@ export async function decodeTxHash(
         });
         output.carbon = carbon.decoded;
         output.warnings.push(...carbon.warnings);
+        attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
         return output;
       } catch (payloadErr) {
         output.warnings.push(
