@@ -33,6 +33,26 @@ pha-decode tx --hash <txHash> --rpc <url>
 pha-decode event --hex <eventHex> [--kind <eventKind>]
 ```
 
+## Hex input expectations (tx mode)
+`pha-decode tx --hex` accepts **either**:
+- a full Carbon **SignedTxMsg** hex (serialized transaction bytes), or
+- a raw VM **script** hex.
+
+It does **not** accept the `carbonTxData` field returned by RPC. `carbonTxData` is
+payload-only (no SignedTxMsg header), so the CLI cannot decode it by itself.
+If you only have a tx hash or RPC response, use `--hash` instead:
+
+```bash
+pha-decode tx --hash <txHash> --rpc <url>
+```
+
+Notes:
+- For Carbon `Phantasma_Raw` transactions, `pha-decode` extracts and decodes the
+  inner VM transaction automatically. Use `--vm-detail` (and `--resolve` if you
+  have ABI data) to inspect method calls.
+- If RPC lacks full VM bytes, the tool falls back to script/payload fields and
+  emits a warning.
+
 ## Options
 - `--format <json|pretty>` Output format (default: `pretty`).
 - `--rpc <url>` RPC endpoint for `--hash` (use JSON-RPC, e.g. `https://pharpc1.phantasma.info/rpc`).
