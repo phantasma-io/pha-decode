@@ -264,6 +264,7 @@ Options:
   --rpc <url>             RPC endpoint for --hash
   --resolve               Enable extra RPC-based resolution
   --verbose               Enable SDK logging
+  --version               Show version number
   --abi <path>            ABI JSON file or directory
   --kind <eventKind>      Event kind hint for hex-encoded (classic) events
   --help                  Show this help

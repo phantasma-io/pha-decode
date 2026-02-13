@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
 import { parseArgs, printHelp } from './args.js';
 import { decodeTxHex, decodeTxHash } from '../decoders/tx.js';
 import { decodeEventHex } from '../decoders/event.js';
@@ -10,6 +11,9 @@ import { fetchContracts } from '../rpc/phantasma.js';
 import type { DecodeOutput } from '../types/decoded.js';
 import type { VmDetailMode, CarbonDetailMode } from '../types/cli.js';
 import { bytesToHex, hexToBytes, setLogger } from 'phantasma-sdk-ts';
+
+const require = createRequire(import.meta.url);
+const packageJson = require('../../package.json') as { version: string };
 
 function applyVmDetail(output: DecodeOutput, mode: VmDetailMode): void {
   const vm = output.vm;
@@ -53,7 +57,13 @@ function applyCarbonDetail(output: DecodeOutput, mode: CarbonDetailMode): void {
 }
 
 async function run(): Promise<void> {
-  const result = parseArgs(process.argv.slice(2));
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
+    console.log(packageJson.version);
+    return;
+  }
+
+  const result = parseArgs(rawArgs);
   if (result.kind === 'help') {
     printHelp();
     return;

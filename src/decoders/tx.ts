@@ -137,18 +137,28 @@ export async function decodeTxHash(
 
   const carbonData = (tx.carbonTxData ?? '').trim();
   if (carbonData.length > 0 && carbonData !== '0x') {
+    let normalized: string | null = null;
     try {
-      const normalized = bytesToHex(hexToBytes(carbonData));
-      const carbon = decodeCarbonSignedTx(normalized);
-      output.carbon = carbon.decoded;
-      output.warnings.push(...carbon.warnings);
-      attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
-      return output;
+      normalized = bytesToHex(hexToBytes(carbonData));
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      output.warnings.push(`SignedTxMsg decode failed (${message}); trying payload-only decode`);
+      output.warnings.push(
+        `RPC carbonTxData is not valid hex (${err instanceof Error ? err.message : String(err)})`
+      );
+    }
+
+    if (normalized) {
+      let signedDecodeError: string | null = null;
       try {
-        const normalized = bytesToHex(hexToBytes(carbonData));
+        const carbon = decodeCarbonSignedTx(normalized);
+        output.carbon = carbon.decoded;
+        output.warnings.push(...carbon.warnings);
+        attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
+        return output;
+      } catch (err) {
+        signedDecodeError = err instanceof Error ? err.message : String(err);
+      }
+
+      try {
         const carbon = decodeCarbonPayloadForRpc(tx.carbonTxType ?? 0, normalized, {
           gasPayer: tx.gasPayer,
           gasLimit: tx.gasLimit,
@@ -161,8 +171,11 @@ export async function decodeTxHash(
         attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
         return output;
       } catch (payloadErr) {
+        if (signedDecodeError) {
+          output.warnings.push(`SignedTxMsg decode failed (${signedDecodeError})`);
+        }
         output.warnings.push(
-          payloadErr instanceof Error ? payloadErr.message : String(payloadErr)
+          `Payload-only decode failed (${payloadErr instanceof Error ? payloadErr.message : String(payloadErr)})`
         );
       }
     }

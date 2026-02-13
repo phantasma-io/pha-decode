@@ -1,6 +1,6 @@
 {
   "name": "pha-decode",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Phantasma transaction and event decoder CLI",
   "type": "module",
   "bin": {
@@ -23,6 +23,7 @@
     "prepare": "npm run build"
   },
   "dependencies": {
+    "pha-decode": "^0.1.2",
     "phantasma-sdk-ts": "^0.2.9"
   },
   "devDependencies": {
