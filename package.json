@@ -23,7 +23,6 @@
     "prepare": "npm run build"
   },
   "dependencies": {
-    "pha-decode": "^0.1.2",
     "phantasma-sdk-ts": "^0.2.9"
   },
   "devDependencies": {
