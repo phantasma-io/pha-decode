@@ -3,6 +3,7 @@ import type { OutputFormat } from './decoded.js';
 export type CliCommand = 'tx' | 'event' | 'rom' | 'address';
 export type VmDetailMode = 'all' | 'calls' | 'ops' | 'none';
 export type CarbonDetailMode = 'all' | 'call' | 'msg' | 'none';
+export type CarbonAddressMode = 'bytes32' | 'pha';
 export type RomDecodeMode = 'auto' | 'legacy' | 'crown';
 
 export interface CliOptions {
@@ -12,6 +13,7 @@ export interface CliOptions {
   verbose: boolean;
   vmDetail: VmDetailMode;
   carbonDetail: CarbonDetailMode;
+  carbonAddresses: CarbonAddressMode;
   romMode: RomDecodeMode;
   protocolVersion: number;
   rpcUrl?: string;

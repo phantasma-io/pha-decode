@@ -4,6 +4,7 @@ import type {
   CliCommand,
   VmDetailMode,
   CarbonDetailMode,
+  CarbonAddressMode,
   RomDecodeMode,
 } from '../types/cli.js';
 import type { OutputFormat } from '../types/decoded.js';
@@ -12,6 +13,7 @@ import { DomainSettings } from 'phantasma-sdk-ts';
 const DEFAULT_FORMAT: OutputFormat = 'pretty';
 const DEFAULT_VM_DETAIL: VmDetailMode = 'all';
 const DEFAULT_CARBON_DETAIL: CarbonDetailMode = 'call';
+const DEFAULT_CARBON_ADDRESSES: CarbonAddressMode = 'bytes32';
 const DEFAULT_ROM_MODE: RomDecodeMode = 'auto';
 const DEFAULT_PROTOCOL_VERSION = DomainSettings.LatestKnownProtocol;
 
@@ -52,6 +54,22 @@ function parseCarbonDetail(value: string): CarbonDetailMode | null {
     case 'msg':
     case 'none':
       return value;
+    default:
+      return null;
+  }
+}
+
+function parseCarbonAddresses(value: string): CarbonAddressMode | null {
+  switch (value) {
+    case 'bytes32':
+    case 'raw':
+    case 'hex':
+    case 'off':
+      return 'bytes32';
+    case 'pha':
+    case 'phantasma':
+    case 'decode':
+      return 'pha';
     default:
       return null;
   }
@@ -158,6 +176,14 @@ function setFlagValue(
       opts.carbonDetail = carbonDetail;
       return null;
     }
+    case 'carbon-addresses': {
+      const carbonAddresses = parseCarbonAddresses(value);
+      if (!carbonAddresses) {
+        return `unknown carbon address mode: ${value}`;
+      }
+      opts.carbonAddresses = carbonAddresses;
+      return null;
+    }
     case 'protocol':
     case 'protocol-version': {
       const protocolVersion = parseProtocol(value);
@@ -222,6 +248,7 @@ export function parseArgs(argv: string[]): ParseResult {
       verbose: false,
       vmDetail: DEFAULT_VM_DETAIL,
       carbonDetail: DEFAULT_CARBON_DETAIL,
+      carbonAddresses: DEFAULT_CARBON_ADDRESSES,
       romMode: DEFAULT_ROM_MODE,
       protocolVersion: DEFAULT_PROTOCOL_VERSION,
       txHex: firstArg,
@@ -248,6 +275,7 @@ export function parseArgs(argv: string[]): ParseResult {
     verbose: false,
     vmDetail: DEFAULT_VM_DETAIL,
     carbonDetail: DEFAULT_CARBON_DETAIL,
+    carbonAddresses: DEFAULT_CARBON_ADDRESSES,
     romMode: DEFAULT_ROM_MODE,
     protocolVersion: DEFAULT_PROTOCOL_VERSION,
   };
@@ -322,6 +350,7 @@ Options:
   --format <json|pretty>  Output format (default: pretty)
   --vm-detail <mode>      VM output detail: all|calls|ops|none (default: all)
   --carbon-detail <mode>  Carbon output detail: all|call|msg|none (default: call)
+  --carbon-addresses <m>  Carbon address output: bytes32|pha (default: bytes32)
   --protocol <number>     Protocol version for interop ABI selection (default: latest)
   --rpc <url>             RPC endpoint for --hash
   --resolve               Enable extra RPC-based resolution

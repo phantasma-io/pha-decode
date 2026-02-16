@@ -32,8 +32,8 @@ npm run build
 ## Usage
 ```bash
 pha-decode <txHex>
-pha-decode tx --hex <txHex>
-pha-decode tx --hash <txHash> --rpc <url>
+pha-decode tx --hex <txHex> [--carbon-addresses <mode>]
+pha-decode tx --hash <txHash> --rpc <url> [--carbon-addresses <mode>]
 pha-decode event --hex <eventHex> [--kind <eventKind>]
 pha-decode rom --hex <romHex> [--symbol <symbol>] [--token-id <tokenId>] [--rom-format <mode>]
 pha-decode address --bytes32 <hex>
@@ -67,6 +67,7 @@ Notes:
 - `--abi <path>` ABI JSON file or directory (merged with built-ins).
 - `--vm-detail <all|calls|ops|none>` Control VM output detail (default: `all`).
 - `--carbon-detail <all|call|msg|none>` Control Carbon output detail (default: `call`).
+- `--carbon-addresses <bytes32|pha>` Carbon address display mode in tx output (default: `bytes32`).
 - `--protocol <number>` Protocol version for interop ABI selection (default: latest known).
 - `--verbose` Enable SDK logging.
 - `--kind <eventKind>` Event kind hint for hex-encoded (classic) events (event mode only).
@@ -83,6 +84,7 @@ Decode a tx hash from RPC:
 pha-decode tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AFBA52A \
   --rpc https://pharpc1.phantasma.info/rpc \
   --format json \
+  --carbon-addresses pha \
   --vm-detail calls \
   --carbon-detail call
 ```
@@ -140,6 +142,7 @@ Notes:
 - Field `carbon.call` is the human-readable call decode (module/method + args).
 - Field `carbon.msg` is the raw payload decode (moduleId/methodId + args hex).
 - Use `--carbon-detail` to show one or both.
+- Use `--carbon-addresses pha` to render known Carbon bytes32 address fields as Phantasma addresses.
 - Event hex decoding applies to classic events; newer structured events do not need hex decoding.
 - If `--kind` is omitted in event mode, the tool returns raw hex with a warning.
 - ROM decoding has separate parser paths:
@@ -148,6 +151,35 @@ Notes:
 - Address conversion mode:
   - `--bytes32` -> `--pha` infers Carbon kind via chain rule (`first 15 bytes == 0` => system, otherwise user),
   - `--pha` -> `--bytes32` supports user/system addresses; interop addresses are rejected.
+
+### Carbon address conversion paths (`--carbon-addresses pha`)
+When enabled, conversion is applied only to known Carbon address fields:
+
+- `carbon.gasFrom`
+- `carbon.witnesses[].address`
+- `carbon.msg.to`
+- `carbon.msg.from`
+- `carbon.msg.transferF[].to`
+- `carbon.msg.transferF[].from`
+- `carbon.msg.transferN[].to`
+- `carbon.msg.transferN[].from`
+- `carbon.msg.mintF[].to`
+- `carbon.msg.burnF[].from`
+- `carbon.msg.mintN[].to`
+- `carbon.msg.burnN[].from`
+- `carbon.call.args[].value` when `type=bytes32`
+- `carbon.call.args[].value[]` when `type=bytes32[]`
+- `carbon.call.args[].value.owner` when `type=token_info|series_info|nft_import`
+- `carbon.call.args[].value.to` when `type=stake_import|txmsg_mint_fungible`
+- `carbon.call.args[].value.address` when `type=name_import|member_import`
+- `carbon.call.args[].value.info.owner` when `type=organization_import|series_import`
+- `carbon.call.args[].value.memberImports[].address` when `type=organization_import`
+- `carbon.call.args[].value.imports[].originator` when `type=series_import`
+- `carbon.call.args[].value.imports[].owner` when `type=series_import`
+- all the same typed mappings for:
+  - `carbon.call.sections[].args[]`
+  - `carbon.calls[].args[]`
+  - `carbon.calls[].sections[].args[]`
 
 ## Dev shortcuts
 This repo ships a `justfile`:

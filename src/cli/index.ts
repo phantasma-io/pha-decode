@@ -5,6 +5,7 @@ import { decodeTxHex, decodeTxHash } from '../decoders/tx.js';
 import { decodeEventHex } from '../decoders/event.js';
 import { decodeRomHex } from '../decoders/rom.js';
 import { decodeAddressConversion } from '../decoders/address.js';
+import { applyCarbonAddressMode } from '../decoders/carbon-addresses.js';
 import { renderOutput } from '../output/render.js';
 import { buildMethodTable, loadAbi, mergeMethodTables } from '../abi/loader.js';
 import type { AbiMethodSpecEntry } from '../abi/loader.js';
@@ -100,6 +101,9 @@ async function run(): Promise<void> {
     if (opts.carbonDetail !== 'call') {
       preWarnings.push('--carbon-detail is ignored for event mode');
     }
+    if (opts.carbonAddresses !== 'bytes32') {
+      preWarnings.push('--carbon-addresses is ignored for event mode');
+    }
   } else if (opts.command === 'rom') {
     if (opts.abiPath) {
       preWarnings.push('--abi is ignored for rom mode');
@@ -112,6 +116,9 @@ async function run(): Promise<void> {
     }
     if (opts.carbonDetail !== 'call') {
       preWarnings.push('--carbon-detail is ignored for rom mode');
+    }
+    if (opts.carbonAddresses !== 'bytes32') {
+      preWarnings.push('--carbon-addresses is ignored for rom mode');
     }
     if (opts.rpcUrl) {
       preWarnings.push('--rpc is ignored for rom mode');
@@ -131,6 +138,9 @@ async function run(): Promise<void> {
     }
     if (opts.carbonDetail !== 'call') {
       preWarnings.push('--carbon-detail is ignored for address mode');
+    }
+    if (opts.carbonAddresses !== 'bytes32') {
+      preWarnings.push('--carbon-addresses is ignored for address mode');
     }
     if (opts.rpcUrl) {
       preWarnings.push('--rpc is ignored for address mode');
@@ -286,6 +296,7 @@ async function run(): Promise<void> {
 
   if (opts.txHex) {
     const output = decodeTxHex(opts.txHex, opts.format, methodTable, opts.protocolVersion);
+    output.warnings.push(...applyCarbonAddressMode(output, opts.carbonAddresses));
     applyVmDetail(output, opts.vmDetail);
     applyCarbonDetail(output, opts.carbonDetail);
     output.warnings.push(...preWarnings);
@@ -306,6 +317,7 @@ async function run(): Promise<void> {
       methodTable,
       opts.protocolVersion
     );
+    output.warnings.push(...applyCarbonAddressMode(output, opts.carbonAddresses));
     applyVmDetail(output, opts.vmDetail);
     applyCarbonDetail(output, opts.carbonDetail);
     output.warnings.push(...preWarnings);
