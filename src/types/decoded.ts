@@ -1,5 +1,5 @@
 export type OutputFormat = 'json' | 'pretty';
-export type DecodeSourceKind = 'tx-hex' | 'tx-hash' | 'event-hex';
+export type DecodeSourceKind = 'tx-hex' | 'tx-hash' | 'event-hex' | 'rom-hex';
 
 export type JsonValue =
   | string
@@ -89,6 +89,43 @@ export interface EventDecoded {
   decoded?: JsonValue;
 }
 
+export interface RomVmStructEntryDecoded {
+  keyVmType: string;
+  key: JsonValue;
+  valueVmType: string;
+  value: JsonValue;
+}
+
+export interface RomVmNodeDecoded {
+  vmTypeId: number;
+  vmType: string;
+  value?: JsonValue;
+  fields?: { [key: string]: JsonValue };
+  entries?: RomVmStructEntryDecoded[];
+}
+
+export interface RomDecoded {
+  parser: 'legacy-vm-dictionary' | 'crown';
+  rawHex: string;
+  symbol?: string;
+  tokenId?: string;
+  name?: string;
+  description?: string;
+  createdUnix?: number;
+  createdIso?: string;
+  fields?: { [key: string]: JsonValue };
+  vm?: {
+    root: RomVmNodeDecoded;
+  };
+  crown?: {
+    addressLength: number;
+    stakerAddressHex: string;
+    stakerAddress?: string;
+    timestampUnix: number;
+    timestampIso: string;
+  };
+}
+
 export interface DecodeOutput {
   source: DecodeSourceKind;
   input: string;
@@ -97,6 +134,7 @@ export interface DecodeOutput {
   carbon?: CarbonDecoded;
   vm?: VmDecoded;
   event?: EventDecoded;
+  rom?: RomDecoded;
   warnings: string[];
   errors: string[];
 }

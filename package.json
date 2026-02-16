@@ -1,6 +1,6 @@
 {
   "name": "pha-decode",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Phantasma transaction and event decoder CLI",
   "type": "module",
   "bin": {

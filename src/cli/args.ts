@@ -4,6 +4,7 @@ import type {
   CliCommand,
   VmDetailMode,
   CarbonDetailMode,
+  RomDecodeMode,
 } from '../types/cli.js';
 import type { OutputFormat } from '../types/decoded.js';
 import { DomainSettings } from 'phantasma-sdk-ts';
@@ -11,10 +12,11 @@ import { DomainSettings } from 'phantasma-sdk-ts';
 const DEFAULT_FORMAT: OutputFormat = 'pretty';
 const DEFAULT_VM_DETAIL: VmDetailMode = 'all';
 const DEFAULT_CARBON_DETAIL: CarbonDetailMode = 'call';
+const DEFAULT_ROM_MODE: RomDecodeMode = 'auto';
 const DEFAULT_PROTOCOL_VERSION = DomainSettings.LatestKnownProtocol;
 
 function isCommand(value: string): value is CliCommand {
-  return value === 'tx' || value === 'event';
+  return value === 'tx' || value === 'event' || value === 'rom';
 }
 
 function parseFormat(value: string): OutputFormat | null {
@@ -63,6 +65,20 @@ function parseProtocol(value: string): number | null {
   return parsed;
 }
 
+function parseRomMode(value: string): RomDecodeMode | null {
+  switch (value) {
+    case 'auto':
+      return 'auto';
+    case 'legacy':
+    case 'common':
+      return 'legacy';
+    case 'crown':
+      return 'crown';
+    default:
+      return null;
+  }
+}
+
 function setFlagValue(
   opts: CliOptions,
   key: string,
@@ -82,6 +98,8 @@ function setFlagValue(
     case 'hex':
       if (opts.command === 'event') {
         opts.eventHex = value;
+      } else if (opts.command === 'rom') {
+        opts.romHex = value;
       } else {
         opts.txHex = value;
       }
@@ -92,6 +110,22 @@ function setFlagValue(
     case 'kind':
       opts.eventKind = value;
       return null;
+    case 'symbol':
+      opts.romSymbol = value;
+      return null;
+    case 'token-id':
+    case 'id':
+      opts.romTokenId = value;
+      return null;
+    case 'rom-format':
+    case 'rom-mode': {
+      const romMode = parseRomMode(value);
+      if (!romMode) {
+        return `unknown rom format: ${value}`;
+      }
+      opts.romMode = romMode;
+      return null;
+    }
     case 'format': {
       const format = parseFormat(value);
       if (!format) {
@@ -142,6 +176,10 @@ function validateOptions(opts: CliOptions): string | null {
     if (!opts.eventHex) {
       return 'event mode requires --hex <eventHex>';
     }
+  } else if (opts.command === 'rom') {
+    if (!opts.romHex) {
+      return 'rom mode requires --hex <romHex>';
+    }
   }
   return null;
 }
@@ -165,6 +203,7 @@ export function parseArgs(argv: string[]): ParseResult {
       verbose: false,
       vmDetail: DEFAULT_VM_DETAIL,
       carbonDetail: DEFAULT_CARBON_DETAIL,
+      romMode: DEFAULT_ROM_MODE,
       protocolVersion: DEFAULT_PROTOCOL_VERSION,
       txHex: firstArg,
     };
@@ -190,6 +229,7 @@ export function parseArgs(argv: string[]): ParseResult {
     verbose: false,
     vmDetail: DEFAULT_VM_DETAIL,
     carbonDetail: DEFAULT_CARBON_DETAIL,
+    romMode: DEFAULT_ROM_MODE,
     protocolVersion: DEFAULT_PROTOCOL_VERSION,
   };
 
@@ -255,6 +295,7 @@ export function printHelp(): void {
   pha-decode tx --hex <txHex>
   pha-decode tx --hash <txHash> [--rpc <url>]
   pha-decode event --hex <eventHex> [--kind <kind>]
+  pha-decode rom --hex <romHex> [--symbol <symbol>] [--token-id <tokenId>] [--rom-format <mode>]
 
 Options:
   --format <json|pretty>  Output format (default: pretty)
@@ -267,6 +308,9 @@ Options:
   --version               Show version number
   --abi <path>            ABI JSON file or directory
   --kind <eventKind>      Event kind hint for hex-encoded (classic) events
+  --symbol <symbol>       ROM symbol hint (used by rom mode, e.g. CROWN)
+  --token-id <tokenId>    ROM token id hint (used by rom mode for naming)
+  --rom-format <mode>     ROM parser mode: auto|legacy|crown (default: auto)
   --help                  Show this help
 `;
   console.log(text);

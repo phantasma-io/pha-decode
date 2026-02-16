@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { parseArgs, printHelp } from './args.js';
 import { decodeTxHex, decodeTxHash } from '../decoders/tx.js';
 import { decodeEventHex } from '../decoders/event.js';
+import { decodeRomHex } from '../decoders/rom.js';
 import { renderOutput } from '../output/render.js';
 import { buildMethodTable, loadAbi, mergeMethodTables } from '../abi/loader.js';
 import type { AbiMethodSpecEntry } from '../abi/loader.js';
@@ -98,6 +99,25 @@ async function run(): Promise<void> {
     if (opts.carbonDetail !== 'call') {
       preWarnings.push('--carbon-detail is ignored for event mode');
     }
+  } else if (opts.command === 'rom') {
+    if (opts.abiPath) {
+      preWarnings.push('--abi is ignored for rom mode');
+    }
+    if (opts.resolve) {
+      preWarnings.push('--resolve is ignored for rom mode');
+    }
+    if (opts.vmDetail !== 'all') {
+      preWarnings.push('--vm-detail is ignored for rom mode');
+    }
+    if (opts.carbonDetail !== 'call') {
+      preWarnings.push('--carbon-detail is ignored for rom mode');
+    }
+    if (opts.rpcUrl) {
+      preWarnings.push('--rpc is ignored for rom mode');
+    }
+    if (opts.eventKind) {
+      preWarnings.push('--kind is ignored for rom mode');
+    }
   } else {
     const table = buildBuiltinMethodTable(opts.protocolVersion);
     methodTable = table;
@@ -157,6 +177,39 @@ async function run(): Promise<void> {
       const rendered = renderOutput({
         source: 'event-hex',
         input: opts.eventHex ?? '',
+        format: opts.format,
+        warnings: preWarnings,
+        errors: [err instanceof Error ? err.message : String(err)],
+      });
+      console.log(rendered);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (opts.command === 'rom') {
+    try {
+      const output: DecodeOutput = {
+        source: 'rom-hex',
+        input: opts.romHex ?? '',
+        format: opts.format,
+        warnings: [...preWarnings],
+        errors: [],
+      };
+      const rom = decodeRomHex({
+        hex: opts.romHex ?? '',
+        mode: opts.romMode,
+        ...(opts.romSymbol ? { symbol: opts.romSymbol } : {}),
+        ...(opts.romTokenId ? { tokenId: opts.romTokenId } : {}),
+      });
+      output.input = rom.decoded.rawHex;
+      output.rom = rom.decoded;
+      output.warnings.push(...rom.warnings);
+      console.log(renderOutput(output));
+    } catch (err) {
+      const rendered = renderOutput({
+        source: 'rom-hex',
+        input: opts.romHex ?? '',
         format: opts.format,
         warnings: preWarnings,
         errors: [err instanceof Error ? err.message : String(err)],

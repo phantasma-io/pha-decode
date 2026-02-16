@@ -41,6 +41,11 @@ function renderPretty(output: DecodeOutput): string {
     lines.push(renderJson(output.event));
   }
 
+  if (output.rom) {
+    lines.push('ROM:');
+    lines.push(renderJson(output.rom));
+  }
+
   return lines.join('\n');
 }
 

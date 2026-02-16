@@ -6,6 +6,9 @@ CLI tool for decoding Phantasma transactions (Carbon + VM) and hex-encoded event
 - Decode Carbon transactions (Call, Call_Multi, mint/burn/transfer).
 - Decode VM transactions (script disassembly + method calls).
 - Decode hex-encoded event data for classic events.
+- Decode NFT ROM bytes with dedicated parsers:
+  - legacy/common VM dictionary ROM format,
+  - CROWN-specific ROM layout (address + timestamp).
 - JSON or pretty output.
 - Optional ABI resolution from files or RPC.
 
@@ -31,6 +34,7 @@ pha-decode <txHex>
 pha-decode tx --hex <txHex>
 pha-decode tx --hash <txHash> --rpc <url>
 pha-decode event --hex <eventHex> [--kind <eventKind>]
+pha-decode rom --hex <romHex> [--symbol <symbol>] [--token-id <tokenId>] [--rom-format <mode>]
 ```
 
 ## Hex input expectations (tx mode)
@@ -63,6 +67,9 @@ Notes:
 - `--protocol <number>` Protocol version for interop ABI selection (default: latest known).
 - `--verbose` Enable SDK logging.
 - `--kind <eventKind>` Event kind hint for hex-encoded (classic) events (event mode only).
+- `--symbol <symbol>` ROM symbol hint (rom mode only, e.g. `CROWN`).
+- `--token-id <tokenId>` ROM token id hint (rom mode only; used for CROWN display name).
+- `--rom-format <auto|legacy|crown>` Select ROM parser mode (default: `auto`).
 - `--help` Show help.
 
 ## Examples
@@ -83,6 +90,20 @@ pha-decode 0xDEADBEEF...
 Decode hex-encoded event data (classic event):
 ```bash
 pha-decode event --hex 0xAABBCC... --kind TokenMint
+```
+
+Decode ROM in auto mode (uses `CROWN` hint to pick the dedicated parser):
+```bash
+pha-decode rom \
+  --hex 220100F100396A4B73E3ABCD6B9039712944D7DF9E8ABE7211E519A91176E83A28D01B10027965 \
+  --symbol CROWN \
+  --token-id 80367770225206466995541877216191568684251978941303868068127874072614271067693 \
+  --format pretty
+```
+
+Force legacy/common ROM parser:
+```bash
+pha-decode rom --hex 0x... --rom-format legacy
 ```
 
 ## Output
@@ -106,6 +127,9 @@ Notes:
 - Use `--carbon-detail` to show one or both.
 - Event hex decoding applies to classic events; newer structured events do not need hex decoding.
 - If `--kind` is omitted in event mode, the tool returns raw hex with a warning.
+- ROM decoding has separate parser paths:
+  - `legacy` for common historical VM dictionary ROMs,
+  - `crown` for CROWN ROMs (`Address` + `UInt32` timestamp), which is intentionally not a generic NFT ROM schema.
 
 ## Dev shortcuts
 This repo ships a `justfile`:
@@ -117,3 +141,4 @@ This repo ships a `justfile`:
 ## Limitations
 - `--resolve` depends on `getContracts` RPC output. If the RPC returns an empty set, VM calls remain unresolved.
 - Unknown methods or argument types fall back to raw hex (no guessing).
+- ROM auto mode chooses parser from context (`CROWN` => crown parser), then falls back to the other parser with a warning if the first parser fails.
