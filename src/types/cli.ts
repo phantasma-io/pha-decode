@@ -1,6 +1,6 @@
 import type { OutputFormat } from './decoded.js';
 
-export type CliCommand = 'tx' | 'event' | 'rom';
+export type CliCommand = 'tx' | 'event' | 'rom' | 'address';
 export type VmDetailMode = 'all' | 'calls' | 'ops' | 'none';
 export type CarbonDetailMode = 'all' | 'call' | 'msg' | 'none';
 export type RomDecodeMode = 'auto' | 'legacy' | 'crown';
@@ -23,6 +23,8 @@ export interface CliOptions {
   romHex?: string;
   romSymbol?: string;
   romTokenId?: string;
+  addressBytes32?: string;
+  addressPha?: string;
 }
 
 export type ParseResult =

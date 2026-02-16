@@ -8,6 +8,11 @@ build:
 
 alias b := build
 
+test:
+    npm test
+
+alias t := test
+
 r *args:
     node dist/cli/index.js {{args}}
 

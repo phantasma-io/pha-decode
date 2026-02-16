@@ -16,7 +16,7 @@ const DEFAULT_ROM_MODE: RomDecodeMode = 'auto';
 const DEFAULT_PROTOCOL_VERSION = DomainSettings.LatestKnownProtocol;
 
 function isCommand(value: string): value is CliCommand {
-  return value === 'tx' || value === 'event' || value === 'rom';
+  return value === 'tx' || value === 'event' || value === 'rom' || value === 'address';
 }
 
 function parseFormat(value: string): OutputFormat | null {
@@ -117,6 +117,14 @@ function setFlagValue(
     case 'id':
       opts.romTokenId = value;
       return null;
+    case 'bytes32':
+    case 'carbon-address':
+      opts.addressBytes32 = value;
+      return null;
+    case 'pha':
+    case 'pha-address':
+      opts.addressPha = value;
+      return null;
     case 'rom-format':
     case 'rom-mode': {
       const romMode = parseRomMode(value);
@@ -180,6 +188,15 @@ function validateOptions(opts: CliOptions): string | null {
     if (!opts.romHex) {
       return 'rom mode requires --hex <romHex>';
     }
+  } else if (opts.command === 'address') {
+    const hasBytes32 = Boolean(opts.addressBytes32);
+    const hasPha = Boolean(opts.addressPha);
+    if (!hasBytes32 && !hasPha) {
+      return 'address mode requires --bytes32 <hex> or --pha <address>';
+    }
+    if (hasBytes32 && hasPha) {
+      return 'address mode accepts only one of --bytes32 or --pha';
+    }
   }
   return null;
 }
@@ -193,9 +210,11 @@ export function parseArgs(argv: string[]): ParseResult {
     return { kind: 'help' };
   }
 
-  // Shorthand: no flags, single arg => tx hex
   const firstArg = argv[0];
-  if (argv.length === 1 && firstArg && !firstArg.startsWith('-')) {
+  const hasExplicitCommand = Boolean(firstArg && isCommand(firstArg));
+
+  // Shorthand: no explicit command, single arg => tx hex
+  if (!hasExplicitCommand && argv.length === 1 && firstArg && !firstArg.startsWith('-')) {
     const opts: CliOptions = {
       command: 'tx',
       format: DEFAULT_FORMAT,
@@ -214,7 +233,7 @@ export function parseArgs(argv: string[]): ParseResult {
     return { kind: 'ok', options: opts };
   }
 
-  const first = argv[0];
+  const first = firstArg;
   let command: CliCommand = 'tx';
   let index = 0;
   if (first && isCommand(first)) {
@@ -296,6 +315,8 @@ export function printHelp(): void {
   pha-decode tx --hash <txHash> [--rpc <url>]
   pha-decode event --hex <eventHex> [--kind <kind>]
   pha-decode rom --hex <romHex> [--symbol <symbol>] [--token-id <tokenId>] [--rom-format <mode>]
+  pha-decode address --bytes32 <hex>
+  pha-decode address --pha <address>
 
 Options:
   --format <json|pretty>  Output format (default: pretty)
@@ -311,6 +332,8 @@ Options:
   --symbol <symbol>       ROM symbol hint (used by rom mode, e.g. CROWN)
   --token-id <tokenId>    ROM token id hint (used by rom mode for naming)
   --rom-format <mode>     ROM parser mode: auto|legacy|crown (default: auto)
+  --bytes32 <hex>         Carbon bytes32 address input (used by address mode)
+  --pha <address>         Phantasma address input (used by address mode)
   --help                  Show this help
 `;
   console.log(text);

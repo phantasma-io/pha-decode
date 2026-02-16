@@ -46,6 +46,11 @@ function renderPretty(output: DecodeOutput): string {
     lines.push(renderJson(output.rom));
   }
 
+  if (output.address) {
+    lines.push('Address:');
+    lines.push(renderJson(output.address));
+  }
+
   return lines.join('\n');
 }
 

@@ -4,6 +4,7 @@ import { parseArgs, printHelp } from './args.js';
 import { decodeTxHex, decodeTxHash } from '../decoders/tx.js';
 import { decodeEventHex } from '../decoders/event.js';
 import { decodeRomHex } from '../decoders/rom.js';
+import { decodeAddressConversion } from '../decoders/address.js';
 import { renderOutput } from '../output/render.js';
 import { buildMethodTable, loadAbi, mergeMethodTables } from '../abi/loader.js';
 import type { AbiMethodSpecEntry } from '../abi/loader.js';
@@ -118,6 +119,37 @@ async function run(): Promise<void> {
     if (opts.eventKind) {
       preWarnings.push('--kind is ignored for rom mode');
     }
+  } else if (opts.command === 'address') {
+    if (opts.abiPath) {
+      preWarnings.push('--abi is ignored for address mode');
+    }
+    if (opts.resolve) {
+      preWarnings.push('--resolve is ignored for address mode');
+    }
+    if (opts.vmDetail !== 'all') {
+      preWarnings.push('--vm-detail is ignored for address mode');
+    }
+    if (opts.carbonDetail !== 'call') {
+      preWarnings.push('--carbon-detail is ignored for address mode');
+    }
+    if (opts.rpcUrl) {
+      preWarnings.push('--rpc is ignored for address mode');
+    }
+    if (opts.eventKind) {
+      preWarnings.push('--kind is ignored for address mode');
+    }
+    if (opts.txHex) {
+      preWarnings.push('--hex is ignored for address mode (use --bytes32)');
+    }
+    if (opts.romHex) {
+      preWarnings.push('--hex is ignored for address mode (use --bytes32)');
+    }
+    if (opts.romSymbol) {
+      preWarnings.push('--symbol is ignored for address mode');
+    }
+    if (opts.romTokenId) {
+      preWarnings.push('--token-id is ignored for address mode');
+    }
   } else {
     const table = buildBuiltinMethodTable(opts.protocolVersion);
     methodTable = table;
@@ -210,6 +242,38 @@ async function run(): Promise<void> {
       const rendered = renderOutput({
         source: 'rom-hex',
         input: opts.romHex ?? '',
+        format: opts.format,
+        warnings: preWarnings,
+        errors: [err instanceof Error ? err.message : String(err)],
+      });
+      console.log(rendered);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (opts.command === 'address') {
+    try {
+      const conversion = decodeAddressConversion({
+        ...(opts.addressBytes32 ? { bytes32: opts.addressBytes32 } : {}),
+        ...(opts.addressPha ? { phantasma: opts.addressPha } : {}),
+      });
+
+      const rendered = renderOutput({
+        source: 'address-convert',
+        input: conversion.decoded.direction === 'bytes32-to-pha'
+          ? conversion.decoded.bytes32
+          : conversion.decoded.phantasma,
+        format: opts.format,
+        address: conversion.decoded,
+        warnings: [...preWarnings, ...conversion.warnings],
+        errors: [],
+      });
+      console.log(rendered);
+    } catch (err) {
+      const rendered = renderOutput({
+        source: 'address-convert',
+        input: opts.addressBytes32 ?? opts.addressPha ?? '',
         format: opts.format,
         warnings: preWarnings,
         errors: [err instanceof Error ? err.message : String(err)],

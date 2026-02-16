@@ -1,5 +1,5 @@
 export type OutputFormat = 'json' | 'pretty';
-export type DecodeSourceKind = 'tx-hex' | 'tx-hash' | 'event-hex' | 'rom-hex';
+export type DecodeSourceKind = 'tx-hex' | 'tx-hash' | 'event-hex' | 'rom-hex' | 'address-convert';
 
 export type JsonValue =
   | string
@@ -126,6 +126,13 @@ export interface RomDecoded {
   };
 }
 
+export interface AddressDecoded {
+  direction: 'bytes32-to-pha' | 'pha-to-bytes32';
+  bytes32: string;
+  phantasma: string;
+  kind: 'user' | 'system';
+}
+
 export interface DecodeOutput {
   source: DecodeSourceKind;
   input: string;
@@ -135,6 +142,7 @@ export interface DecodeOutput {
   vm?: VmDecoded;
   event?: EventDecoded;
   rom?: RomDecoded;
+  address?: AddressDecoded;
   warnings: string[];
   errors: string[];
 }

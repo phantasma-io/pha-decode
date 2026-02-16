@@ -9,6 +9,7 @@ CLI tool for decoding Phantasma transactions (Carbon + VM) and hex-encoded event
 - Decode NFT ROM bytes with dedicated parsers:
   - legacy/common VM dictionary ROM format,
   - CROWN-specific ROM layout (address + timestamp).
+- Convert Carbon `bytes32` addresses to Phantasma addresses and back.
 - JSON or pretty output.
 - Optional ABI resolution from files or RPC.
 
@@ -35,6 +36,8 @@ pha-decode tx --hex <txHex>
 pha-decode tx --hash <txHash> --rpc <url>
 pha-decode event --hex <eventHex> [--kind <eventKind>]
 pha-decode rom --hex <romHex> [--symbol <symbol>] [--token-id <tokenId>] [--rom-format <mode>]
+pha-decode address --bytes32 <hex>
+pha-decode address --pha <address>
 ```
 
 ## Hex input expectations (tx mode)
@@ -70,6 +73,8 @@ Notes:
 - `--symbol <symbol>` ROM symbol hint (rom mode only, e.g. `CROWN`).
 - `--token-id <tokenId>` ROM token id hint (rom mode only; used for CROWN display name).
 - `--rom-format <auto|legacy|crown>` Select ROM parser mode (default: `auto`).
+- `--bytes32 <hex>` Carbon bytes32 address input (address mode only).
+- `--pha <address>` Phantasma address input (address mode only).
 - `--help` Show help.
 
 ## Examples
@@ -106,6 +111,16 @@ Force legacy/common ROM parser:
 pha-decode rom --hex 0x... --rom-format legacy
 ```
 
+Decode Carbon `bytes32` into a Phantasma address:
+```bash
+pha-decode address --bytes32 f100396a4b73e3abcd6b9039712944d7df9e8abe7211e519a91176e83a28d01b
+```
+
+Convert Phantasma address back to Carbon `bytes32`:
+```bash
+pha-decode address --pha P2KKzrLNZK75f4Vtp4wwWocfgoqywBo3zKBWxBXjLgbxXmL
+```
+
 ## Output
 JSON output is stable and machine-friendly:
 ```json
@@ -130,11 +145,15 @@ Notes:
 - ROM decoding has separate parser paths:
   - `legacy` for common historical VM dictionary ROMs,
   - `crown` for CROWN ROMs (`Address` + `UInt32` timestamp), which is intentionally not a generic NFT ROM schema.
+- Address conversion mode:
+  - `--bytes32` -> `--pha` infers Carbon kind via chain rule (`first 15 bytes == 0` => system, otherwise user),
+  - `--pha` -> `--bytes32` supports user/system addresses; interop addresses are rejected.
 
 ## Dev shortcuts
 This repo ships a `justfile`:
 - `just` list commands
 - `just b` build
+- `just t` run tests
 - `just r <args>` run `dist/cli/index.js`
 - `just d <args>` run in dev mode (tsx)
 
