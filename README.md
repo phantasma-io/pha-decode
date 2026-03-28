@@ -1,85 +1,128 @@
 # pha-decode
 
-CLI tool for decoding Phantasma transactions (Carbon + VM) and hex-encoded event data.
+CLI for decoding Phantasma Carbon + VM transactions, contract lifecycle scripts, event hex payloads, ROM blobs, and address conversions.
 
 ## Features
-- Decode Carbon transactions (Call, Call_Multi, mint/burn/transfer).
-- Decode VM transactions (script disassembly + method calls).
-- Decode hex-encoded event data for classic events.
-- Decode NFT ROM bytes with dedicated parsers:
-  - legacy/common VM dictionary ROM format,
-  - CROWN-specific ROM layout (address + timestamp).
-- Convert Carbon `bytes32` addresses to Phantasma addresses and back.
-- JSON or pretty output.
-- Optional ABI resolution from files or RPC.
+
+- Decode Carbon transaction hex or fetch-and-decode by tx hash
+- Decode nested VM transactions and disassemble raw VM scripts
+- Decode VM interop calls with ABI-aware argument naming
+- Summarize contract deploy / upgrade interops:
+  - contract name
+  - signer / `from`
+  - script byte length + SHA-256
+  - ABI byte length + SHA-256
+  - ABI method/event summaries when ABI bytes are present
+- Decode classic hex-encoded event payloads
+- Decode ROM blobs in:
+  - legacy/common VM dictionary format
+  - dedicated `CROWN` format
+- Convert Carbon `bytes32` addresses to Phantasma addresses and back
+- Render stable JSON or human-readable pretty output
+- Merge ABI from local files or from RPC contract discovery
 
 ## Requirements
-- Node.js with ESM support (Node 18+ recommended).
+
+- Node.js 18+ recommended
 
 ## Installation
+
 ```bash
-# install globally (recommended for CLI usage)
+# global install
 npm i -g pha-decode
 
-# or run once via npx
-npx pha-decode --help
-
-# local dev install
+# local development install
 npm install
 npm run build
+
+# inspect CLI help or version
+pha-decode --help
+pha-decode --version
 ```
 
 ## Usage
+
 ```bash
 pha-decode <txHex>
-pha-decode tx --hex <txHex> [--carbon-addresses <mode>]
-pha-decode tx --hash <txHash> --rpc <url> [--carbon-addresses <mode>]
-pha-decode event --hex <eventHex> [--kind <eventKind>]
+pha-decode tx --hex <txHex>
+pha-decode tx --hash <txHash> [--rpc <url>]
+pha-decode event --hex <eventHex> [--kind <kind>]
 pha-decode rom --hex <romHex> [--symbol <symbol>] [--token-id <tokenId>] [--rom-format <mode>]
 pha-decode address --bytes32 <hex>
 pha-decode address --pha <address>
 ```
 
-## Hex input expectations (tx mode)
-`pha-decode tx --hex` accepts **either**:
-- a full Carbon **SignedTxMsg** hex (serialized transaction bytes), or
-- a raw VM **script** hex.
+## Common Options
 
-It does **not** accept the `carbonTxData` field returned by RPC. `carbonTxData` is
-payload-only (no SignedTxMsg header), so the CLI cannot decode it by itself.
-If you only have a tx hash or RPC response, use `--hash` instead:
+- `--format <json|pretty>`: output format, default `pretty`
+- `--vm-detail <all|calls|ops|none>`: VM detail level, default `all`
+- `--carbon-detail <all|call|msg|none>`: Carbon detail level, default `call`
+- `--carbon-addresses <bytes32|pha>`: render known Carbon addresses as raw `bytes32` or decoded Phantasma addresses, default `bytes32`
+- `--protocol <number>`: protocol version used for built-in interop ABI selection, default latest known protocol
+- `--rpc <url>`: RPC endpoint for `--hash`
+- `--resolve`: fetch contract metadata from RPC and merge it into method resolution
+- `--abi <path>`: ABI JSON file or directory to merge into method resolution
+- `--verbose`: enable SDK logging
+- `--version`: print the package version
+- `--help`: print CLI help
+
+Mode-specific flags:
+
+- event mode
+  - `--kind <eventKind>`
+- ROM mode
+  - `--symbol <symbol>`
+  - `--token-id <tokenId>`
+  - `--rom-format <auto|legacy|crown>`
+- address mode
+  - `--bytes32 <hex>`
+  - `--pha <address>`
+
+## Transaction Input Expectations
+
+`pha-decode tx --hex` accepts either:
+
+- a full Carbon `SignedTxMsg` hex string
+- a raw VM script hex string
+
+It does not accept payload-only RPC fields such as `carbonTxData`. If you only have a tx hash or an RPC response, use:
 
 ```bash
 pha-decode tx --hash <txHash> --rpc <url>
 ```
 
-Notes:
-- For Carbon `Phantasma_Raw` transactions, `pha-decode` extracts and decodes the
-  inner VM transaction automatically. Use `--vm-detail` (and `--resolve` if you
-  have ABI data) to inspect method calls.
-- If RPC lacks full VM bytes, the tool falls back to script/payload fields and
-  emits a warning.
+If the decoded Carbon transaction contains a nested VM transaction, `pha-decode` extracts it automatically.
 
-## Options
-- `--format <json|pretty>` Output format (default: `pretty`).
-- `--rpc <url>` RPC endpoint for `--hash` (use JSON-RPC, e.g. `https://pharpc1.phantasma.info/rpc`).
-- `--resolve` Fetch contracts from RPC and merge ABI for VM call decoding.
-- `--abi <path>` ABI JSON file or directory (merged with built-ins).
-- `--vm-detail <all|calls|ops|none>` Control VM output detail (default: `all`).
-- `--carbon-detail <all|call|msg|none>` Control Carbon output detail (default: `call`).
-- `--carbon-addresses <bytes32|pha>` Carbon address display mode in tx output (default: `bytes32`).
-- `--protocol <number>` Protocol version for interop ABI selection (default: latest known).
-- `--verbose` Enable SDK logging.
-- `--kind <eventKind>` Event kind hint for hex-encoded (classic) events (event mode only).
-- `--symbol <symbol>` ROM symbol hint (rom mode only, e.g. `CROWN`).
-- `--token-id <tokenId>` ROM token id hint (rom mode only; used for CROWN display name).
-- `--rom-format <auto|legacy|crown>` Select ROM parser mode (default: `auto`).
-- `--bytes32 <hex>` Carbon bytes32 address input (address mode only).
-- `--pha <address>` Phantasma address input (address mode only).
-- `--help` Show help.
+## Contract Lifecycle Decoding
+
+`pha-decode` now enriches deploy / upgrade interops in VM output.
+
+For `Runtime.DeployContract` and `Runtime.UpgradeContract`, the decoded output includes:
+
+- `vm.methodCalls[].summary`
+  - `kind`
+  - `from`
+  - `contractName`
+  - `contractScript`
+  - optional `contractABI`
+- `vm.methodCalls[].args[].details`
+  - per-script summary:
+    - `byteLength`
+    - `sha256`
+    - `instructionCount` when disassembly succeeds
+  - per-ABI summary:
+    - `byteLength`
+    - `sha256`
+    - `methodCount`
+    - `eventCount`
+    - decoded method/event descriptors when ABI parsing succeeds
+
+This makes `pha-decode` useful as a companion to `pha-deploy contract deploy --dry-run` and `pha-deploy contract upgrade --dry-run`.
 
 ## Examples
-Decode a tx hash from RPC:
+
+Decode a tx hash via RPC:
+
 ```bash
 pha-decode tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AFBA52A \
   --rpc https://pharpc1.phantasma.info/rpc \
@@ -89,42 +132,55 @@ pha-decode tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AF
   --carbon-detail call
 ```
 
-Decode a local tx hex (shorthand):
+Decode a local tx hex or raw VM script:
+
 ```bash
 pha-decode 0xDEADBEEF...
 ```
 
-Decode hex-encoded event data (classic event):
+Decode a deploy / upgrade dry-run transaction generated elsewhere:
+
+```bash
+pha-decode tx --hex <SIGNED_TX_HEX> --vm-detail calls --format pretty
+```
+
+Decode classic event hex:
+
 ```bash
 pha-decode event --hex 0xAABBCC... --kind TokenMint
 ```
 
-Decode ROM in auto mode (uses `CROWN` hint to pick the dedicated parser):
+Decode ROM in auto mode:
+
 ```bash
 pha-decode rom \
   --hex 220100F100396A4B73E3ABCD6B9039712944D7DF9E8ABE7211E519A91176E83A28D01B10027965 \
   --symbol CROWN \
-  --token-id 80367770225206466995541877216191568684251978941303868068127874072614271067693 \
-  --format pretty
+  --token-id 80367770225206466995541877216191568684251978941303868068127874072614271067693
 ```
 
-Force legacy/common ROM parser:
+Force the legacy/common ROM parser:
+
 ```bash
 pha-decode rom --hex 0x... --rom-format legacy
 ```
 
-Decode Carbon `bytes32` into a Phantasma address:
+Convert Carbon `bytes32` to a Phantasma address:
+
 ```bash
 pha-decode address --bytes32 f100396a4b73e3abcd6b9039712944d7df9e8abe7211e519a91176e83a28d01b
 ```
 
-Convert Phantasma address back to Carbon `bytes32`:
+Convert a Phantasma address back to Carbon `bytes32`:
+
 ```bash
 pha-decode address --pha P2KKzrLNZK75f4Vtp4wwWocfgoqywBo3zKBWxBXjLgbxXmL
 ```
 
-## Output
+## Output Shape
+
 JSON output is stable and machine-friendly:
+
 ```json
 {
   "source": "tx-hash",
@@ -133,63 +189,36 @@ JSON output is stable and machine-friendly:
   "carbon": { "...": "..." },
   "vm": { "...": "..." },
   "event": { "...": "..." },
+  "rom": { "...": "..." },
+  "address": { "...": "..." },
   "warnings": [],
   "errors": []
 }
 ```
 
 Notes:
-- Field `carbon.call` is the human-readable call decode (module/method + args).
-- Field `carbon.msg` is the raw payload decode (moduleId/methodId + args hex).
-- Use `--carbon-detail` to show one or both.
-- Use `--carbon-addresses pha` to render known Carbon bytes32 address fields as Phantasma addresses.
-- Event hex decoding applies to classic events; newer structured events do not need hex decoding.
-- If `--kind` is omitted in event mode, the tool returns raw hex with a warning.
-- ROM decoding has separate parser paths:
-  - `legacy` for common historical VM dictionary ROMs,
-  - `crown` for CROWN ROMs (`Address` + `UInt32` timestamp), which is intentionally not a generic NFT ROM schema.
-- Address conversion mode:
-  - `--bytes32` -> `--pha` infers Carbon kind via chain rule (`first 15 bytes == 0` => system, otherwise user),
-  - `--pha` -> `--bytes32` supports user/system addresses; interop addresses are rejected.
 
-### Carbon address conversion paths (`--carbon-addresses pha`)
-When enabled, conversion is applied only to known Carbon address fields:
+- `carbon.call` is the human-readable Carbon call decode
+- `carbon.msg` is the raw Carbon payload decode
+- `vm.instructions` and `vm.methodCalls` are controlled by `--vm-detail`
+- `--carbon-addresses pha` only converts known address-shaped Carbon fields
+- event hex decoding applies to classic event payloads only
+- ROM auto mode chooses a parser from the available context and falls back with warnings when needed
 
-- `carbon.gasFrom`
-- `carbon.witnesses[].address`
-- `carbon.msg.to`
-- `carbon.msg.from`
-- `carbon.msg.transferF[].to`
-- `carbon.msg.transferF[].from`
-- `carbon.msg.transferN[].to`
-- `carbon.msg.transferN[].from`
-- `carbon.msg.mintF[].to`
-- `carbon.msg.burnF[].from`
-- `carbon.msg.mintN[].to`
-- `carbon.msg.burnN[].from`
-- `carbon.call.args[].value` when `type=bytes32`
-- `carbon.call.args[].value[]` when `type=bytes32[]`
-- `carbon.call.args[].value.owner` when `type=token_info|series_info|nft_import`
-- `carbon.call.args[].value.to` when `type=stake_import|txmsg_mint_fungible`
-- `carbon.call.args[].value.address` when `type=name_import|member_import`
-- `carbon.call.args[].value.info.owner` when `type=organization_import|series_import`
-- `carbon.call.args[].value.memberImports[].address` when `type=organization_import`
-- `carbon.call.args[].value.imports[].originator` when `type=series_import`
-- `carbon.call.args[].value.imports[].owner` when `type=series_import`
-- all the same typed mappings for:
-  - `carbon.call.sections[].args[]`
-  - `carbon.calls[].args[]`
-  - `carbon.calls[].sections[].args[]`
+## Dev Shortcuts
 
-## Dev shortcuts
-This repo ships a `justfile`:
-- `just` list commands
-- `just b` build
-- `just t` run tests
-- `just r <args>` run `dist/cli/index.js`
-- `just d <args>` run in dev mode (tsx)
+This repo ships a `justfile` with:
+
+- `just build`
+- `just test`
+- `just r <args>`
+- `just d <args>`
+
+Use `just --list` to inspect the full local helper set.
 
 ## Limitations
-- `--resolve` depends on `getContracts` RPC output. If the RPC returns an empty set, VM calls remain unresolved.
-- Unknown methods or argument types fall back to raw hex (no guessing).
-- ROM auto mode chooses parser from context (`CROWN` => crown parser), then falls back to the other parser with a warning if the first parser fails.
+
+- `--resolve` requires `--rpc`
+- if RPC `getContracts` is incomplete, unresolved methods fall back to raw data
+- unknown methods or argument types stay raw; the CLI does not guess
+- contract lifecycle summaries depend on the VM interop arguments actually containing script / ABI bytes

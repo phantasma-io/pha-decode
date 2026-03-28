@@ -63,12 +63,14 @@ export interface VmMethodCallArg {
   value: JsonValue;
   name?: string;
   abiType?: string;
+  details?: JsonValue;
 }
 
 export interface VmMethodCall {
   contract: string;
   method: string;
   args: VmMethodCallArg[];
+  summary?: JsonValue;
 }
 
 export interface VmDecoded {

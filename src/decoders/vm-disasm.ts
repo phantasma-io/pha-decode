@@ -1,4 +1,14 @@
-import { Address, bytesToHex, hexToBytes, twosComplementLEToBigInt, VMType } from 'phantasma-sdk-ts';
+import { createHash } from 'node:crypto';
+import {
+  Address,
+  bytesToHex,
+  ContractEvent,
+  ContractMethod,
+  hexToBytes,
+  PBinaryReader,
+  twosComplementLEToBigInt,
+  VMType,
+} from 'phantasma-sdk-ts';
 import type { JsonValue, VmInstruction, VmMethodCall, VmMethodCallArg } from '../types/decoded.js';
 import type { AbiMethodSpec, AbiMethodSpecEntry, AbiParamSpec } from '../abi/loader.js';
 
@@ -285,6 +295,184 @@ function decodeLoadValue(type: VMType, bytes: Uint8Array): JsonValue {
     default:
       return bytesToHex(bytes);
   }
+}
+
+function sha256Hex(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function isPrintableText(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 32 || code > 126) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function decodeOpaqueText(bytes: Uint8Array): JsonValue {
+  const text = new TextDecoder().decode(bytes);
+  return isPrintableText(text) ? text : bytesToHex(bytes);
+}
+
+function summarizeContractScript(bytes: Uint8Array): JsonValue {
+  const summary: Record<string, JsonValue> = {
+    byteLength: bytes.length,
+    sha256: sha256Hex(bytes),
+  };
+
+  try {
+    const instructions = disassembleScript(bytes);
+    summary.instructionCount = instructions.length;
+  } catch (err) {
+    summary.disassemblyError = err instanceof Error ? err.message : String(err);
+  }
+
+  return summary;
+}
+
+function summarizeContractAbi(bytes: Uint8Array): JsonValue {
+  const summary: Record<string, JsonValue> = {
+    byteLength: bytes.length,
+    sha256: sha256Hex(bytes),
+  };
+
+  try {
+    const reader = new PBinaryReader(bytes);
+    const methodCount = reader.readByte();
+    const methods: JsonValue[] = [];
+
+    for (let i = 0; i < methodCount; i++) {
+      const method = ContractMethod.Unserialize(reader);
+      methods.push({
+        name: method.name,
+        returnType: vmTypeName(method.returnType),
+        offset: method.offset,
+        parameters: method.parameters.map((parameter) => ({
+          name: parameter.name,
+          type: vmTypeName(parameter.type),
+        })),
+      });
+    }
+
+    const eventCount = reader.readByte();
+    const events: JsonValue[] = [];
+
+    for (let i = 0; i < eventCount; i++) {
+      const event = ContractEvent.Unserialize(reader);
+      events.push({
+        value: event.value,
+        name: event.name,
+        returnType: vmTypeName(event.returnType),
+        description: decodeOpaqueText(event.description),
+      });
+    }
+
+    summary.methodCount = methodCount;
+    summary.eventCount = eventCount;
+    summary.methods = methods;
+    summary.events = events;
+
+    if (!reader.isEndOfStream) {
+      summary.trailingBytes = reader.length - reader.position;
+    }
+  } catch (err) {
+    summary.abiDecodeError = err instanceof Error ? err.message : String(err);
+  }
+
+  return summary;
+}
+
+function unwrapVmSerializedAddress(bytes: Uint8Array): Uint8Array {
+  if (bytes.length === Address.LengthInBytes + 1 && bytes[0] === Address.LengthInBytes) {
+    return bytes.subarray(1);
+  }
+  return bytes;
+}
+
+function tryDecodeAddressText(rawArg: VmValue): string | undefined {
+  if (rawArg.data instanceof Address) {
+    return rawArg.data.Text;
+  }
+
+  if (rawArg.data instanceof Uint8Array) {
+    try {
+      return Address.FromBytes(unwrapVmSerializedAddress(rawArg.data)).Text;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function tryDecodeAddressTextFromHex(value: string): string | undefined {
+  try {
+    const bytes = unwrapVmSerializedAddress(hexToBytes(value));
+    if (bytes.length !== Address.LengthInBytes) {
+      return undefined;
+    }
+    return Address.FromBytes(bytes).Text;
+  } catch {
+    return undefined;
+  }
+}
+
+function decorateContractLifecycleArgs(
+  key: string,
+  args: VmMethodCallArg[],
+  rawArgs: VmValue[]
+): { args: VmMethodCallArg[]; summary?: JsonValue } {
+  if (key !== 'Runtime.DeployContract' && key !== 'Runtime.UpgradeContract') {
+    return { args };
+  }
+
+  const decoratedArgs = args.map((arg) => ({ ...arg }));
+  const summary: Record<string, JsonValue> = {
+    kind: key === 'Runtime.DeployContract' ? 'contract-deploy' : 'contract-upgrade',
+  };
+
+  for (let i = 0; i < decoratedArgs.length; i++) {
+    const arg = decoratedArgs[i];
+    const rawArg = rawArgs[i];
+    const argName = arg?.name;
+
+    if (!argName || !rawArg) {
+      continue;
+    }
+
+    if (argName === 'from' && typeof arg.value === 'string') {
+      const addressText = tryDecodeAddressText(rawArg) ?? tryDecodeAddressTextFromHex(arg.value);
+      if (addressText) {
+        arg.details = { phantasmaAddress: addressText };
+        summary.from = addressText;
+      } else {
+        summary.from = arg.value;
+      }
+      continue;
+    }
+
+    if (argName === 'contractName' && typeof arg.value === 'string') {
+      summary.contractName = arg.value;
+      continue;
+    }
+
+    if (argName === 'contractScript' && rawArg.data instanceof Uint8Array) {
+      const details = summarizeContractScript(rawArg.data);
+      arg.details = details;
+      summary.contractScript = details;
+      continue;
+    }
+
+    if (argName === 'contractABI' && rawArg.data instanceof Uint8Array) {
+      const details = summarizeContractAbi(rawArg.data);
+      arg.details = details;
+      summary.contractABI = details;
+    }
+  }
+
+  return { args: decoratedArgs, summary };
 }
 
 function instructionToOutput(instruction: Instruction): VmInstruction {
@@ -581,10 +769,16 @@ function extractMethodCalls(
         const method = stack.pop()?.asString() ?? '';
         const resolved = resolveMethodSpec(contract, method, stack, table, warnings, protocolVersion);
         const args = resolved.spec ? popArgs(resolved.key, stack, resolved.spec.params.length) : [];
+        const decorated = decorateContractLifecycleArgs(
+          resolved.key,
+          args.map((arg, index) => attachAbi(arg.toJson(), resolved.spec?.params[index])),
+          args
+        );
         calls.push({
           contract,
           method,
-          args: args.map((arg, index) => attachAbi(arg.toJson(), resolved.spec?.params[index])),
+          args: decorated.args,
+          ...(decorated.summary ? { summary: decorated.summary } : {}),
         });
         break;
       }
@@ -593,10 +787,16 @@ function extractMethodCalls(
         const method = regs[src]?.asString() ?? '';
         const resolved = resolveMethodSpec('', method, stack, table, warnings, protocolVersion);
         const args = resolved.spec ? popArgs(resolved.key, stack, resolved.spec.params.length) : [];
+        const decorated = decorateContractLifecycleArgs(
+          resolved.key,
+          args.map((arg, index) => attachAbi(arg.toJson(), resolved.spec?.params[index])),
+          args
+        );
         calls.push({
           contract: '',
           method,
-          args: args.map((arg, index) => attachAbi(arg.toJson(), resolved.spec?.params[index])),
+          args: decorated.args,
+          ...(decorated.summary ? { summary: decorated.summary } : {}),
         });
         break;
       }

@@ -1,7 +1,7 @@
 {
   "name": "pha-decode",
-  "version": "0.1.4",
-  "description": "Phantasma transaction and event decoder CLI",
+  "version": "0.1.5",
+  "description": "Phantasma transaction, contract, ROM, and event decoder CLI",
   "type": "module",
   "bin": {
     "pha-decode": "dist/cli/index.js"
@@ -23,12 +23,12 @@
     "start": "node dist/cli/index.js",
     "prepare": "npm run build"
   },
-  "dependencies": {
-    "phantasma-sdk-ts": "^0.2.9"
-  },
   "devDependencies": {
     "@types/node": "^22.12.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "phantasma-sdk-ts": "^0.5.2"
   }
 }
