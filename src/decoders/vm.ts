@@ -1,4 +1,4 @@
-import { hexToBytes, PBinaryReader } from 'phantasma-sdk-ts';
+import { PBinaryReader, hexToBytes } from 'phantasma-sdk-ts';
 import type { VmDecoded } from '../types/decoded.js';
 import { disassembleVmScript } from './vm-disasm.js';
 import type { AbiMethodSpecEntry } from '../abi/loader.js';
@@ -6,6 +6,18 @@ import type { AbiMethodSpecEntry } from '../abi/loader.js';
 export interface VmDecodeResult {
   decoded: VmDecoded;
   warnings: string[];
+}
+
+export interface VmScriptContext {
+  nexus?: string;
+  chain?: string;
+  payloadHex?: string;
+  expirationUnix?: number;
+  signatures?: number;
+}
+
+export interface VmTransactionDecodeOptions {
+  requireExact?: boolean;
 }
 
 function isPrintableAscii(value: string): boolean {
@@ -26,12 +38,51 @@ function readByteArrayHex(reader: PBinaryReader): string {
   return reader.read(length);
 }
 
+function decodeVmScriptWithContext(
+  scriptHex: string,
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number,
+  context: VmScriptContext = {}
+): VmDecodeResult {
+  const warnings: string[] = [];
+  const decoded: VmDecoded = {
+    nexus: context.nexus ?? '',
+    chain: context.chain ?? '',
+    scriptHex,
+    payloadHex: context.payloadHex ?? '',
+    expirationUnix: context.expirationUnix ?? 0,
+    signatures: context.signatures ?? 0,
+  };
+
+  if (scriptHex.length > 0) {
+    try {
+      const disasm = disassembleVmScript(scriptHex, methodTable, protocolVersion);
+      decoded.instructions = disasm.instructions;
+      decoded.methodCalls = disasm.methodCalls;
+      warnings.push(...disasm.warnings);
+    } catch (err) {
+      warnings.push(`VM disassembly failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { decoded, warnings };
+}
+
+export function decodeVmScript(
+  scriptHex: string,
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number,
+  context: VmScriptContext = {}
+): VmDecodeResult {
+  return decodeVmScriptWithContext(scriptHex, methodTable, protocolVersion, context);
+}
+
 export function decodeVmTransaction(
   hex: string,
   methodTable?: Map<string, AbiMethodSpecEntry>,
-  protocolVersion?: number
+  protocolVersion?: number,
+  options: VmTransactionDecodeOptions = {}
 ): VmDecodeResult {
-  const warnings: string[] = [];
   const bytes = hexToBytes(hex);
   const reader = new PBinaryReader(bytes);
 
@@ -53,28 +104,42 @@ export function decodeVmTransaction(
   }
 
   if (!reader.isEndOfStream) {
-    warnings.push('VM decode did not consume all bytes');
+    const message = 'VM decode did not consume all bytes';
+    if (options.requireExact) {
+      throw new Error(message);
+    }
+    return {
+      decoded: {
+        nexus,
+        chain,
+        scriptHex,
+        payloadHex,
+        expirationUnix: expiration,
+        signatures: signatureCount,
+      },
+      warnings: [message],
+    };
   }
 
-  const decoded: VmDecoded = {
+  return decodeVmScriptWithContext(scriptHex, methodTable, protocolVersion, {
     nexus,
     chain,
-    scriptHex,
     payloadHex,
     expirationUnix: expiration,
     signatures: signatureCount,
-  };
+  });
+}
 
-  if (scriptHex.length > 0) {
-    try {
-      const disasm = disassembleVmScript(scriptHex, methodTable, protocolVersion);
-      decoded.instructions = disasm.instructions;
-      decoded.methodCalls = disasm.methodCalls;
-      warnings.push(...disasm.warnings);
-    } catch (err) {
-      warnings.push(`VM disassembly failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
+export function decodeVmHex(
+  hex: string,
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
+): VmDecodeResult {
+  try {
+    return decodeVmTransaction(hex, methodTable, protocolVersion, { requireExact: true });
+  } catch {
+    // Not a full VM transaction container. Fall through to raw script decode.
   }
 
-  return { decoded, warnings };
+  return decodeVmScript(hex, methodTable, protocolVersion);
 }

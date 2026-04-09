@@ -364,6 +364,10 @@ Options:
   --bytes32 <hex>         Carbon bytes32 address input (used by address mode)
   --pha <address>         Phantasma address input (used by address mode)
   --help                  Show this help
+
+Tx input notes:
+  --hex accepts exact Carbon SignedTxMsg, full VM tx, or raw VM script hex
+  --hash reconstructs VM output from Carbon Phantasma wrappers when possible
 `;
   console.log(text);
 }

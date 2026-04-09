@@ -1,5 +1,6 @@
 import {
   Address,
+  CarbonBlob,
   CarbonBinaryReader,
   Bytes32,
   SignedTxMsg,
@@ -38,6 +39,29 @@ export interface CarbonRpcContext {
   expiration?: number;
   payloadHex?: string;
   signatures?: unknown[];
+}
+
+function buildDecodedFromSignedTx(signed: SignedTxMsg, warnings: string[]): CarbonDecoded {
+  if (!signed.msg) {
+    throw new Error('Carbon tx missing msg');
+  }
+
+  const msg = signed.msg;
+  const type = msg.type as TxTypes;
+  const decoded: CarbonDecoded = {
+    type,
+    typeName: TxTypes[type] ?? `Unknown(${type})`,
+    expiry: msg.expiry.toString(),
+    maxGas: msg.maxGas.toString(),
+    maxData: msg.maxData.toString(),
+    gasFrom: msg.gasFrom.ToHex(),
+    payload: msg.payload?.data ?? '',
+    msg: carbonValueToJson(msg.msg ?? null),
+    witnesses: carbonValueToJson(signed.witnesses ?? []),
+  };
+
+  attachCallMetadata(msg.msg ?? null, decoded, warnings);
+  return decoded;
 }
 
 function decodeCarbonPayload(
@@ -152,29 +176,18 @@ export function decodeCarbonSignedTx(hex: string): CarbonDecodeResult {
   if (remaining.length > 0) {
     warnings.push(`Carbon decode left ${remaining.length} trailing bytes`);
   }
+  return { decoded: buildDecodedFromSignedTx(signed, warnings), warnings };
+}
 
-  if (!signed.msg) {
-    throw new Error('Carbon tx missing msg');
-  }
+export function decodeCarbonSignedTxExact(hex: string): CarbonDecodeResult {
+  const warnings: string[] = [];
+  const bytes = hexToBytes(hex);
 
-  const msg = signed.msg;
-  const type = msg.type as TxTypes;
-  const typeName = TxTypes[type] ?? `Unknown(${type})`;
-  const decoded: CarbonDecoded = {
-    type,
-    typeName,
-    expiry: msg.expiry.toString(),
-    maxGas: msg.maxGas.toString(),
-    maxData: msg.maxData.toString(),
-    gasFrom: msg.gasFrom.ToHex(),
-    payload: msg.payload?.data ?? '',
-    msg: carbonValueToJson(msg.msg ?? null),
-    witnesses: carbonValueToJson(signed.witnesses ?? []),
-  };
-
-  attachCallMetadata(msg.msg ?? null, decoded, warnings);
-
-  return { decoded, warnings };
+  // Exact signed-tx parsing is needed in input auto-detect mode. Otherwise,
+  // a raw VM script can be misclassified as Carbon if its prefix happens to
+  // resemble a valid SignedTxMsg header.
+  const signed = CarbonBlob.NewFromBytesEx(SignedTxMsg, bytes, false);
+  return { decoded: buildDecodedFromSignedTx(signed, warnings), warnings };
 }
 
 export function decodeCarbonPayloadForRpc(

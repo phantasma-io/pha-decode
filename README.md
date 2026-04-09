@@ -5,7 +5,8 @@ CLI for decoding Phantasma Carbon + VM transactions, contract lifecycle scripts,
 ## Features
 
 - Decode Carbon transaction hex or fetch-and-decode by tx hash
-- Decode nested VM transactions and disassemble raw VM scripts
+- Decode Carbon `Phantasma` / `Phantasma_Raw` wrappers into a VM view
+- Decode full VM transaction containers and disassemble raw VM scripts
 - Decode VM interop calls with ABI-aware argument naming
 - Summarize contract deploy / upgrade interops:
   - contract name
@@ -83,6 +84,7 @@ Mode-specific flags:
 `pha-decode tx --hex` accepts either:
 
 - a full Carbon `SignedTxMsg` hex string
+- a full VM transaction hex string
 - a raw VM script hex string
 
 It does not accept payload-only RPC fields such as `carbonTxData`. If you only have a tx hash or an RPC response, use:
@@ -91,7 +93,12 @@ It does not accept payload-only RPC fields such as `carbonTxData`. If you only h
 pha-decode tx --hash <txHash> --rpc <url>
 ```
 
-If the decoded Carbon transaction contains a nested VM transaction, `pha-decode` extracts it automatically.
+When the decoded Carbon transaction carries VM execution data, `pha-decode` reconstructs `output.vm` automatically:
+
+- `TxTypes.Phantasma` (`type 15`): reconstructs VM metadata from the Carbon envelope and disassembles `msg.script`
+- `TxTypes.Phantasma_Raw` (`type 16`): unwraps and decodes the inner full VM transaction
+
+For `tx --hash`, `pha-decode` first tries `carbonTxData`. If RPC also exposes a top-level `script`, that script is used as a fallback when full VM reconstruction is not possible.
 
 ## Contract Lifecycle Decoding
 
@@ -132,7 +139,7 @@ pha-decode tx --hash 155422A6882C3342933521DDC1A335292BF6448DBD489ED0BE21CFC74AF
   --carbon-detail call
 ```
 
-Decode a local tx hex or raw VM script:
+Decode a local Carbon tx, full VM tx, or raw VM script:
 
 ```bash
 pha-decode 0xDEADBEEF...

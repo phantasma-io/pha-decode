@@ -1,10 +1,9 @@
 import type { CarbonDecoded, DecodeOutput, OutputFormat } from '../types/decoded.js';
 import { bytesToHex, hexToBytes, TxTypes } from 'phantasma-sdk-ts';
-import { decodeCarbonPayloadForRpc, decodeCarbonSignedTx } from './carbon.js';
-import { decodeVmTransaction } from './vm.js';
+import { decodeCarbonPayloadForRpc, decodeCarbonSignedTxExact } from './carbon.js';
+import { decodeVmHex, decodeVmScript, decodeVmTransaction } from './vm.js';
 import { fetchTransaction } from '../rpc/phantasma.js';
 import type { TransactionData } from 'phantasma-sdk-ts';
-import { disassembleVmScript } from './vm-disasm.js';
 import type { AbiMethodSpecEntry } from '../abi/loader.js';
 
 function buildBaseOutput(source: DecodeOutput['source'], input: string, format: OutputFormat): DecodeOutput {
@@ -25,29 +24,132 @@ function extractPhantasmaRawTxHex(msg: CarbonDecoded['msg']): string | null {
   return typeof transaction === 'string' && transaction.length > 0 ? transaction : null;
 }
 
-function attachInnerVmIfPhantasmaRaw(
+function extractPhantasmaScriptEnvelope(
+  msg: CarbonDecoded['msg']
+): { nexus: string; chain: string; scriptHex: string } | null {
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
+    return null;
+  }
+
+  const record = msg as Record<string, unknown>;
+  const nexus = record.nexus;
+  const chain = record.chain;
+  const scriptHex = record.script;
+  if (typeof nexus !== 'string' || typeof chain !== 'string' || typeof scriptHex !== 'string' || scriptHex.length === 0) {
+    return null;
+  }
+
+  return { nexus, chain, scriptHex };
+}
+
+function payloadTextToHex(payload: string): string {
+  return bytesToHex(new TextEncoder().encode(payload));
+}
+
+function expiryMsToUnixSeconds(expiry: string): number {
+  try {
+    return Number(BigInt(expiry) / 1000n);
+  } catch {
+    return 0;
+  }
+}
+
+function countWitnesses(witnesses: CarbonDecoded['witnesses']): number {
+  return Array.isArray(witnesses) ? witnesses.length : 0;
+}
+
+interface CarbonVmContext {
+  payloadHex?: string;
+  expirationUnix?: number;
+  signatures?: number;
+}
+
+function normalizeOptionalHex(value: string | undefined, warnings: string[], label: string): string {
+  if (!value) {
+    return '';
+  }
+
+  try {
+    return bytesToHex(hexToBytes(value));
+  } catch (err) {
+    warnings.push(
+      `${label} is not valid hex (${err instanceof Error ? err.message : String(err)})`
+    );
+    return value;
+  }
+}
+
+function attachVmFromCarbon(
   output: DecodeOutput,
   methodTable?: Map<string, AbiMethodSpecEntry>,
-  protocolVersion?: number
-): void {
-  if (!output.carbon || output.carbon.type !== TxTypes.Phantasma_Raw) {
-    return;
+  protocolVersion?: number,
+  context: CarbonVmContext = {}
+): boolean {
+  if (!output.carbon) {
+    return false;
   }
-  // Phantasma_Raw wraps a full VM transaction; decode it to expose the inner payload.
-  const txHex = extractPhantasmaRawTxHex(output.carbon.msg);
-  if (!txHex) {
-    output.warnings.push('Phantasma_Raw payload missing inner transaction bytes');
-    return;
-  }
-  try {
-    const vm = decodeVmTransaction(txHex, methodTable, protocolVersion);
+
+  if (output.carbon.type === TxTypes.Phantasma) {
+    const envelope = extractPhantasmaScriptEnvelope(output.carbon.msg);
+    if (!envelope) {
+      output.warnings.push('Phantasma payload missing nexus/chain/script fields');
+      return false;
+    }
+
+    const vm = decodeVmScript(envelope.scriptHex, methodTable, protocolVersion, {
+      nexus: envelope.nexus,
+      chain: envelope.chain,
+      payloadHex: context.payloadHex ?? payloadTextToHex(output.carbon.payload),
+      expirationUnix: context.expirationUnix ?? expiryMsToUnixSeconds(output.carbon.expiry),
+      signatures: context.signatures ?? countWitnesses(output.carbon.witnesses),
+    });
     output.vm = vm.decoded;
     output.warnings.push(...vm.warnings);
-  } catch (err) {
-    output.warnings.push(
-      `Phantasma_Raw inner VM decode failed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    return true;
   }
+
+  if (output.carbon.type === TxTypes.Phantasma_Raw) {
+    const txHex = extractPhantasmaRawTxHex(output.carbon.msg);
+    if (!txHex) {
+      output.warnings.push('Phantasma_Raw payload missing inner transaction bytes');
+      return false;
+    }
+    try {
+      const vm = decodeVmTransaction(txHex, methodTable, protocolVersion, { requireExact: true });
+      output.vm = vm.decoded;
+      output.warnings.push(...vm.warnings);
+      return true;
+    } catch (err) {
+      output.warnings.push(
+        `Phantasma_Raw inner VM decode failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function attachVmFromRpcScript(
+  output: DecodeOutput,
+  tx: TransactionData,
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
+): boolean {
+  const scriptHex = normalizeOptionalHex(tx.script, output.warnings, 'RPC script');
+  if (!scriptHex) {
+    return false;
+  }
+
+  const vm = decodeVmScript(scriptHex, methodTable, protocolVersion, {
+    chain: tx.chainAddress,
+    payloadHex: normalizeOptionalHex(tx.payload, output.warnings, 'RPC payload'),
+    expirationUnix: tx.expiration ?? 0,
+    signatures: tx.signatures?.length ?? 0,
+  });
+  output.vm = vm.decoded;
+  output.warnings.push(...vm.warnings);
+  return true;
 }
 
 export function decodeTxHex(
@@ -66,18 +168,20 @@ export function decodeTxHex(
   }
 
   try {
-    // Prefer Carbon decode first; if it fails, fall back to VM decoding.
-    const carbon = decodeCarbonSignedTx(normalized);
+    // Exact Carbon parsing must reject trailing bytes. Otherwise a raw VM
+    // script can be mistaken for SignedTxMsg if its prefix happens to look
+    // like a valid Carbon header.
+    const carbon = decodeCarbonSignedTxExact(normalized);
     output.carbon = carbon.decoded;
     output.warnings.push(...carbon.warnings);
-    attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
+    attachVmFromCarbon(output, methodTable, protocolVersion);
     return output;
   } catch {
     // Carbon parse failed; try VM next.
   }
 
   try {
-    const vm = decodeVmTransaction(normalized, methodTable, protocolVersion);
+    const vm = decodeVmHex(normalized, methodTable, protocolVersion);
     output.vm = vm.decoded;
     output.warnings.push(...vm.warnings);
     return output;
@@ -89,51 +193,16 @@ export function decodeTxHex(
   return output;
 }
 
-function decodeVmFromRpc(
-  tx: TransactionData,
-  methodTable?: Map<string, AbiMethodSpecEntry>,
-  protocolVersion?: number
-): { vm: NonNullable<DecodeOutput['vm']>; warnings: string[] } {
-  // RPC provides script/payload but not the serialized VM tx container.
-  const warnings: string[] = [];
-  const decoded: DecodeOutput['vm'] = {
-    nexus: '',
-    chain: tx.chainAddress,
-    scriptHex: tx.script ?? '',
-    payloadHex: tx.payload ?? '',
-    expirationUnix: tx.expiration ?? 0,
-    signatures: tx.signatures?.length ?? 0,
-  };
-  if (decoded.scriptHex) {
-    try {
-      const disasm = disassembleVmScript(decoded.scriptHex, methodTable, protocolVersion);
-      decoded.instructions = disasm.instructions;
-      decoded.methodCalls = disasm.methodCalls;
-      warnings.push(...disasm.warnings);
-    } catch {
-      warnings.push('VM disassembly failed for RPC script');
-    }
-  }
-  return { vm: decoded, warnings };
-}
-
-export async function decodeTxHash(
+export function decodeTxDataFromRpc(
   hash: string,
   rpcUrl: string,
+  tx: TransactionData,
   format: OutputFormat,
   methodTable?: Map<string, AbiMethodSpecEntry>,
   protocolVersion?: number
-): Promise<DecodeOutput> {
+): DecodeOutput {
   const output = buildBaseOutput('tx-hash', hash, format);
   output.rpc = { url: rpcUrl, method: 'getTransaction' };
-
-  let tx: TransactionData;
-  try {
-    tx = await fetchTransaction(rpcUrl, hash);
-  } catch (err) {
-    output.errors.push(err instanceof Error ? err.message : String(err));
-    return output;
-  }
 
   const carbonData = (tx.carbonTxData ?? '').trim();
   if (carbonData.length > 0 && carbonData !== '0x') {
@@ -149,11 +218,16 @@ export async function decodeTxHash(
     if (normalized) {
       let signedDecodeError: string | null = null;
       try {
-        const carbon = decodeCarbonSignedTx(normalized);
+        const carbon = decodeCarbonSignedTxExact(normalized);
         output.carbon = carbon.decoded;
         output.warnings.push(...carbon.warnings);
-        attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
-        return output;
+        if (attachVmFromCarbon(output, methodTable, protocolVersion, {
+          payloadHex: normalizeOptionalHex(tx.payload, output.warnings, 'RPC payload'),
+          expirationUnix: tx.expiration ?? 0,
+          signatures: tx.signatures?.length ?? 0,
+        })) {
+          return output;
+        }
       } catch (err) {
         signedDecodeError = err instanceof Error ? err.message : String(err);
       }
@@ -168,8 +242,13 @@ export async function decodeTxHash(
         });
         output.carbon = carbon.decoded;
         output.warnings.push(...carbon.warnings);
-        attachInnerVmIfPhantasmaRaw(output, methodTable, protocolVersion);
-        return output;
+        if (attachVmFromCarbon(output, methodTable, protocolVersion, {
+          payloadHex: normalizeOptionalHex(tx.payload, output.warnings, 'RPC payload'),
+          expirationUnix: tx.expiration ?? 0,
+          signatures: tx.signatures?.length ?? 0,
+        })) {
+          return output;
+        }
       } catch (payloadErr) {
         if (signedDecodeError) {
           output.warnings.push(`SignedTxMsg decode failed (${signedDecodeError})`);
@@ -181,9 +260,29 @@ export async function decodeTxHash(
     }
   }
 
-  const vmResult = decodeVmFromRpc(tx, methodTable, protocolVersion);
-  output.vm = vmResult.vm;
-  output.warnings.push(...vmResult.warnings);
-  output.warnings.push('RPC does not expose full VM tx bytes; output is script/payload only');
+  if (attachVmFromRpcScript(output, tx, methodTable, protocolVersion)) {
+    output.warnings.push('RPC does not expose full VM tx bytes; output is script/payload only');
+  }
+
   return output;
+}
+
+export async function decodeTxHash(
+  hash: string,
+  rpcUrl: string,
+  format: OutputFormat,
+  methodTable?: Map<string, AbiMethodSpecEntry>,
+  protocolVersion?: number
+): Promise<DecodeOutput> {
+  let tx: TransactionData;
+  try {
+    tx = await fetchTransaction(rpcUrl, hash);
+  } catch (err) {
+    const output = buildBaseOutput('tx-hash', hash, format);
+    output.rpc = { url: rpcUrl, method: 'getTransaction' };
+    output.errors.push(err instanceof Error ? err.message : String(err));
+    return output;
+  }
+
+  return decodeTxDataFromRpc(hash, rpcUrl, tx, format, methodTable, protocolVersion);
 }
